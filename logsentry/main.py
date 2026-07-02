@@ -9,17 +9,18 @@ def main():
     Parses arguments, extracts IPs, and queries the VirusTotal API.
     """
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
-    parser.add_argument("--log", required=True, help="Path to the log file to analyze")
+    parser.add_argument("-l","--log", required=True, help="Path to the log file to analyze")
+    parser.add_argument("-t","--threshold", type = int,default=5, help="Minimum number of failed attempts to consider an IP suspicious")
 
     args = parser.parse_args()
 
     print(f"[*] Analyzing log file: {args.log}")
-    raw_ips = extract_ips_from_log(args.log)
+    ips = extract_ips_from_log(args.log,args.threshold)
 
-    unique_ips = list(set(raw_ips))
-    print(f"[*] Found {len(unique_ips)} unique IPs.")
 
-    for ip in unique_ips:
+    print(f"[*] Found {len(ips)} unique IPs.")
+
+    for ip in ips:
         print(f"\n[*] Checking IP: {ip}...")
         vt_data = check_ip_virustotal(ip)
 
