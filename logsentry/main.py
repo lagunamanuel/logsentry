@@ -37,9 +37,11 @@ def main():
                 print(f"[-] IP {ip} -> VirusTotal: clean")
         else:
             print(f"[-] Could not retrieve data for {ip}")
-        if index < total - 1:
-            print(f"[!] Waiting 15 seconds to respect rate limit...")
-            time.sleep(15)
+        if index < total-1:
+            for remaining in range(15, 0, -1):
+                print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
+                time.sleep(1)
+            print()
 
 
 if __name__ == "__main__":
