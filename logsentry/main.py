@@ -15,6 +15,7 @@ def main():
     parser.add_argument("-t", "--threshold", type=int, default=5,
                         help="Minimum number of failed attempts to consider an IP suspicious")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
+    parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
 
     args = parser.parse_args()
 
@@ -41,7 +42,7 @@ def main():
                     print(f"[-] IP {ip} -> VirusTotal: clean")
             else:
                 print(f"[-] Could not retrieve data for {ip}")
-            if index < total - 1:
+            if index < total - 1 and not args.premium:
                 for remaining in range(15, 0, -1):
                     print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
                     time.sleep(1)
