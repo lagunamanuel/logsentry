@@ -14,6 +14,7 @@ def main():
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
     parser.add_argument("-t", "--threshold", type=int, default=5,
                         help="Minimum number of failed attempts to consider an IP suspicious")
+    parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
 
     args = parser.parse_args()
 
@@ -24,24 +25,27 @@ def main():
 
     total = len(ips)
     for index, ip in enumerate(ips):
-        print(f"\n[*] Checking IP: {ip}...")
-        vt_data = check_ip_virustotal(ip)
-
-        if vt_data and "data" in vt_data:
-            stats = vt_data["data"]["attributes"]["last_analysis_stats"]
-            malicious = stats.get("malicious", 0)
-
-            if malicious > 0:
-                print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
-            else:
-                print(f"[-] IP {ip} -> VirusTotal: clean")
+        if args.no_vt: #Fast path: Just announce IP is found, no API calls.
+            print(f"[*] IP {ip} found (Skipping VirusTotal)")
         else:
-            print(f"[-] Could not retrieve data for {ip}")
-        if index < total-1:
-            for remaining in range(15, 0, -1):
-                print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
-                time.sleep(1)
-            print()
+            print(f"\n[*] Checking IP: {ip}...")
+            vt_data = check_ip_virustotal(ip)
+
+            if vt_data and "data" in vt_data:
+                stats = vt_data["data"]["attributes"]["last_analysis_stats"]
+                malicious = stats.get("malicious", 0)
+
+                if malicious > 0:
+                    print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
+                else:
+                    print(f"[-] IP {ip} -> VirusTotal: clean")
+            else:
+                print(f"[-] Could not retrieve data for {ip}")
+            if index < total - 1:
+                for remaining in range(15, 0, -1):
+                    print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
+                    time.sleep(1)
+                print()
 
 
 if __name__ == "__main__":
