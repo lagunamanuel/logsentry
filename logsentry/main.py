@@ -10,6 +10,18 @@ def main():
     Main entry point for LogSentry.
     Parses arguments, extracts IPs, and queries the VirusTotal API.
     """
+
+    banner = r"""
+         _                ____             _                  
+        | |    ___   __ _/ ___|  ___ _ __ | |_ _ __ _   _ 
+        | |   / _ \ / _` \___ \ / _ \ '_ \| __| '__| | | |
+        | |__| (_) | (_| |___) |  __/ | | | |_| |  | |_| |
+        |_____\___/ \__, |____/ \___|_| |_|\__|_|   \__, |
+                    |___/                           |___/ 
+        """
+    print(banner)
+
+
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
     parser.add_argument("-t", "--threshold", type=int, default=5,
