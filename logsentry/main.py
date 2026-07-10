@@ -42,7 +42,12 @@ def main():
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
         else:
             print(f"\n[*] Checking IP: {ip}...")
-            vt_data = check_ip_virustotal(ip)
+            try:
+                vt_data = check_ip_virustotal(ip)
+            except EnvironmentError as e:
+                print(f"[!] VirusTotal API error: {e}")
+                return
+
 
             if vt_data and "data" in vt_data:
                 stats = vt_data["data"]["attributes"]["last_analysis_stats"]

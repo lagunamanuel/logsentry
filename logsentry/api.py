@@ -9,7 +9,7 @@ def check_ip_virustotal(ip_address: str) -> dict:
     result_data = {}
     
     if not api_key:
-        print("Error: VT_API_KEY environment variable is not set.")
+        raise EnvironmentError("VT_API_KEY environment variable is not set.")
     else:
         url = f"https://www.virustotal.com/api/v3/ip_addresses/{ip_address}"
         headers = {
