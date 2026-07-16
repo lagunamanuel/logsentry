@@ -9,7 +9,11 @@ from logsentry.api import check_ip_virustotal
 def main():
     """
     Main entry point for LogSentry.
-    Parses arguments, extracts IPs, and queries the VirusTotal API.
+
+    Handles argument parsing, environment variable validation,
+    extracts suspicious IPs from the provided log file, and
+    orchestrates the VirusTotal API checks.
+
     """
 
     banner = r"""
@@ -61,7 +65,8 @@ def main():
                     print(f"[-] IP {ip} -> VirusTotal: clean")
             else:
                 print(f"[-] Could not retrieve data for {ip}")
-            if index < total - 1 and not args.premium:
+
+            if index < total - 1 and not args.premium: #The program waits 15 seconds because VirusTotal has 4 calls/min limit
                 for remaining in range(15, 0, -1):
                     print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
                     time.sleep(1)
