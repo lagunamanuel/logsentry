@@ -17,7 +17,7 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
 
 
-
+                #            250-255|200-249 |0-199         *3    250-255|200-249 |0-199
     ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
     try:
         with open(log_path, 'r') as file:
