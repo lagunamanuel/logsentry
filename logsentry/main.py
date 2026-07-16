@@ -9,7 +9,11 @@ from logsentry.api import check_ip_virustotal
 def main():
     """
     Main entry point for LogSentry.
-    Parses arguments, extracts IPs, and queries the VirusTotal API.
+    
+    Handles argument parsing, environment variable validation,
+    extracts suspicious IPs from the provided log file, and
+    orchestrates the VirusTotal API checks.
+
     """
 
     banner = r"""
