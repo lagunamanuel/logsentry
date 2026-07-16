@@ -1,5 +1,6 @@
 import argparse
 import time
+import os
 
 from logsentry.parser import extract_ips_from_log
 from logsentry.api import check_ip_virustotal
@@ -21,7 +22,6 @@ def main():
         """
     print(banner)
 
-
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
     parser.add_argument("-t", "--threshold", type=int, default=5,
@@ -32,22 +32,24 @@ def main():
     args = parser.parse_args()
 
     print(f"[*] Analyzing log file: {args.log}")
+
+    if not args.no_vt and not os.environ.get("VT_API_KEY"):
+        print("[!] Error: VT_API_KEY environment variable is not set.")
+        print("[-] Please set it first: export VT_API_KEY='your_api_key'")
+        print("[-] Or run the tool with --no-vt for local mode.")
+        return
+
     ips = extract_ips_from_log(args.log, args.threshold)
 
     print(f"[*] Found {len(ips)} unique IPs.")
 
     total = len(ips)
     for index, ip in enumerate(ips):
-        if args.no_vt: #Fast path: Just announce IP is found, no API calls.
+        if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
         else:
             print(f"\n[*] Checking IP: {ip}...")
-            try:
-                vt_data = check_ip_virustotal(ip)
-            except EnvironmentError as e:
-                print(f"[!] VirusTotal API error: {e}")
-                return
-
+            vt_data = check_ip_virustotal(ip)
 
             if vt_data and "data" in vt_data:
                 stats = vt_data["data"]["attributes"]["last_analysis_stats"]
