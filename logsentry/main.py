@@ -54,23 +54,34 @@ def main():
         else:
             print(f"\n[*] Checking IP: {ip}...")
             vt_data = check_ip_virustotal(ip)
+            evaluate_vt_data(ip, vt_data)
 
-            if vt_data and "data" in vt_data:
-                stats = vt_data["data"]["attributes"]["last_analysis_stats"]
-                malicious = stats.get("malicious", 0)
-
-                if malicious > 0:
-                    print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
-                else:
-                    print(f"[-] IP {ip} -> VirusTotal: clean")
-            else:
-                print(f"[-] Could not retrieve data for {ip}")
-
-            if index < total - 1 and not args.premium: #The program waits 15 seconds because VirusTotal has 4 calls/min limit
+            if index < total - 1 and not args.premium:  # The program waits 15 seconds because VirusTotal has 4 calls/min limit
                 for remaining in range(15, 0, -1):
                     print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
                     time.sleep(1)
                 print()
+
+
+def evaluate_vt_data(ip: str, vt_data: dict) -> None:
+    """
+        Evaluates the VirusTotal API response and prints the results.
+
+        Args:
+            ip (str): The IP address that was checked.
+            vt_data (dict): The JSON response payload from VirusTotal.
+        """
+
+    if vt_data and "data" in vt_data:
+        stats = vt_data["data"]["attributes"]["last_analysis_stats"]
+        malicious = stats.get("malicious", 0)
+
+        if malicious > 0:
+            print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
+        else:
+            print(f"[-] IP {ip} -> VirusTotal: clean")
+    else:
+        print(f"[-] Could not retrieve data for {ip}")
 
 
 if __name__ == "__main__":
