@@ -40,3 +40,32 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    export VT_API_KEY="your_api_key_here"
    ```
    *(Tip: You can add this line to your `~/.bashrc` or `~/.zshrc` to make it persistent).*
+
+## 🛠️ Usage
+
+Run the script by pointing it to a log file. By default, it will look for IPs with at least 5 occurrences.
+
+```bash
+python3 -m logsentry.main -l /path/to/your/test.log
+```
+
+### Arguments
+
+| Argument | Short | Description |
+| :--- | :--- | :--- |
+| `--log` | `-l` | **(Required)** Path to the log file to analyze. |
+| `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
+| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
+| `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+
+### Examples
+
+**1. Basic scan with a custom threshold of 10:**
+```bash
+python3 -m logsentry.main -l auth.log -t 10
+```
+
+**2. Fast local parsing (no API calls):**
+```bash
+python3 -m logsentry.main -l auth.log --no-vt
+```
