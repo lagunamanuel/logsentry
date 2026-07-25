@@ -77,3 +77,7 @@ python3 -m logsentry.main -l auth.log --no-vt
 - [ ] **Phase 3:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
 - [ ] **Phase 4:** Export results to JSON/CSV formats for SIEM ingestion.
 - [ ] **Phase 5:** Native packaging for easier system-wide installation.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
