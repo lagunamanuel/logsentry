@@ -69,3 +69,11 @@ python3 -m logsentry.main -l auth.log -t 10
 ```bash
 python3 -m logsentry.main -l auth.log --no-vt
 ```
+
+## 🗺️ Roadmap
+
+- [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
+- [x] **Phase 2:** Argument parsing, rate-limit handling, and architecture refactoring.
+- [ ] **Phase 3:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
+- [ ] **Phase 4:** Export results to JSON/CSV formats for SIEM ingestion.
+- [ ] **Phase 5:** Native packaging for easier system-wide installation.
