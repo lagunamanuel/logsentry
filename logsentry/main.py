@@ -32,6 +32,7 @@ def main():
                         help="Minimum number of failed attempts to consider an IP suspicious")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
+    parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
 
     args = parser.parse_args()
 
@@ -48,29 +49,42 @@ def main():
     print(f"[*] Found {len(ips)} unique IPs.")
 
     total = len(ips)
+    results = []
+
     for index, ip in enumerate(ips):
         if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
         else:
             print(f"\n[*] Checking IP: {ip}...")
             vt_data = check_ip_virustotal(ip)
-            evaluate_vt_data(ip, vt_data)
+            result = evaluate_vt_data(ip, vt_data)
+            results.append(result)
 
-            if index < total - 1 and not args.premium:  # The program waits 15 seconds because VirusTotal has 4 calls/min limit
-                for remaining in range(15, 0, -1):
-                    print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
-                    time.sleep(1)
-                print()
+        if index < total - 1 and not args.premium:
+            for remaining in range(15, 0, -1):
+                print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
+                time.sleep(1)
+            print()
+
+    if args.output and results:
+        from logsentry.reporter import export_to_csv
+        export_to_csv(results, args.output)
+        print(f"\n[*] Results exported to {args.output}")
 
 
-def evaluate_vt_data(ip: str, vt_data: dict) -> None:
+def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
     """
-        Evaluates the VirusTotal API response and prints the results.
+    Evaluates the VirusTotal API response, prints the results,
+    and returns a summary dict for reporting purposes.
 
-        Args:
-            ip (str): The IP address that was checked.
-            vt_data (dict): The JSON response payload from VirusTotal.
-        """
+    Args:
+        ip (str): The IP address that was checked.
+        vt_data (dict): The JSON response payload from VirusTotal.
+
+    Returns:
+        dict: A dictionary with 'ip' and 'malicious_engines' keys.
+    """
+    malicious = 0
 
     if vt_data and "data" in vt_data:
         stats = vt_data["data"]["attributes"]["last_analysis_stats"]
@@ -83,6 +97,7 @@ def evaluate_vt_data(ip: str, vt_data: dict) -> None:
     else:
         print(f"[-] Could not retrieve data for {ip}")
 
+    return {"ip": ip, "malicious_engines": malicious}
 
 if __name__ == "__main__":
     main()
