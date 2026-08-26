@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
     parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
-    
+
     args = parser.parse_args()
 
     print(f"[*] Analyzing log file: {args.log}")
@@ -64,14 +64,19 @@ def main():
                 print()
 
 
-def evaluate_vt_data(ip: str, vt_data: dict) -> None:
+def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
     """
-        Evaluates the VirusTotal API response and prints the results.
+    Evaluates the VirusTotal API response, prints the results,
+    and returns a summary dict for reporting purposes.
 
-        Args:
-            ip (str): The IP address that was checked.
-            vt_data (dict): The JSON response payload from VirusTotal.
-        """
+    Args:
+        ip (str): The IP address that was checked.
+        vt_data (dict): The JSON response payload from VirusTotal.
+
+    Returns:
+        dict: A dictionary with 'ip' and 'malicious_engines' keys.
+    """
+    malicious = 0
 
     if vt_data and "data" in vt_data:
         stats = vt_data["data"]["attributes"]["last_analysis_stats"]
@@ -84,6 +89,7 @@ def evaluate_vt_data(ip: str, vt_data: dict) -> None:
     else:
         print(f"[-] Could not retrieve data for {ip}")
 
+    return {"ip": ip, "malicious_engines": malicious}
 
 if __name__ == "__main__":
     main()
