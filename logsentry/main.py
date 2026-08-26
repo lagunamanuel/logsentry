@@ -32,7 +32,8 @@ def main():
                         help="Minimum number of failed attempts to consider an IP suspicious")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
-
+    parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
+    
     args = parser.parse_args()
 
     print(f"[*] Analyzing log file: {args.log}")
