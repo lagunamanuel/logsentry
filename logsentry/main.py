@@ -49,19 +49,27 @@ def main():
     print(f"[*] Found {len(ips)} unique IPs.")
 
     total = len(ips)
+    results = []
+
     for index, ip in enumerate(ips):
         if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
         else:
             print(f"\n[*] Checking IP: {ip}...")
             vt_data = check_ip_virustotal(ip)
-            evaluate_vt_data(ip, vt_data)
+            result = evaluate_vt_data(ip, vt_data)
+            results.append(result)
 
-            if index < total - 1 and not args.premium:  # The program waits 15 seconds because VirusTotal has 4 calls/min limit
-                for remaining in range(15, 0, -1):
-                    print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
-                    time.sleep(1)
-                print()
+        if index < total - 1 and not args.premium:
+            for remaining in range(15, 0, -1):
+                print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
+                time.sleep(1)
+            print()
+
+    if args.output and results:
+        from logsentry.reporter import export_to_csv
+        export_to_csv(results, args.output)
+        print(f"\n[*] Results exported to {args.output}")
 
 
 def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
