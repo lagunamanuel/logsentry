@@ -2,6 +2,7 @@ from logsentry.reporter import export_to_csv
 
 
 def test_export_to_csv_creates_file_with_correct_content(tmp_path):
+    """Should write a CSV file with the correct header and data rows."""
     output_file = tmp_path / "results.csv"
     data = [
         {"ip": "1.2.3.4", "malicious_engines": 3},
@@ -17,6 +18,7 @@ def test_export_to_csv_creates_file_with_correct_content(tmp_path):
 
 
 def test_export_to_csv_empty_data(tmp_path):
+    """Should write only the header when data is an empty list."""
     output_file = tmp_path / "empty.csv"
     export_to_csv([], str(output_file))
 
