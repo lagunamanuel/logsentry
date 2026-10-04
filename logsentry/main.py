@@ -6,14 +6,13 @@ from logsentry.parser import extract_ips_from_log
 from logsentry.api import check_ip_virustotal
 
 
-def main():
+def main() -> None:
     """
     Main entry point for LogSentry.
 
     Handles argument parsing, environment variable validation,
     extracts suspicious IPs from the provided log file, and
     orchestrates the VirusTotal API checks.
-
     """
 
     banner = r"""
@@ -67,6 +66,7 @@ def main():
             print()
 
     if args.output and results:
+        # Deferred import: reporter is only needed when --output is set
         from logsentry.reporter import export_to_csv
         export_to_csv(results, args.output)
         print(f"\n[*] Results exported to {args.output}")
@@ -98,6 +98,7 @@ def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
         print(f"[-] Could not retrieve data for {ip}")
 
     return {"ip": ip, "malicious_engines": malicious}
+
 
 if __name__ == "__main__":
     main()
