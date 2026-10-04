@@ -10,7 +10,11 @@ def check_ip_virustotal(ip_address: str) -> dict:
         ip_address (str): The IP address to query.
 
     Returns:
-        dict: A dictionary containing information about the IP address.
+        dict: A dictionary containing information about the IP address,
+              or an empty dict if the API request fails.
+
+    Raises:
+        EnvironmentError: If the VT_API_KEY environment variable is not set.
     """
     api_key = os.environ.get("VT_API_KEY")
     result_data = {}
