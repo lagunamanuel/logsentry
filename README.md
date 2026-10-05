@@ -72,6 +72,10 @@ python3 -m logsentry.main -l auth.log -t 10
 python3 -m logsentry.main -l auth.log --no-vt
 ```
 
+**3. Scan and export results to CSV:**
+```bash
+python3 -m logsentry.main -l auth.log -o results.csv
+```
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
