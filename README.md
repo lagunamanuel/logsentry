@@ -76,6 +76,14 @@ python3 -m logsentry.main -l auth.log --no-vt
 ```bash
 python3 -m logsentry.main -l auth.log -o results.csv
 ```
+## 🧪 Testing
+
+LogSentry has a full unit test suite covering the parser, API client and reporter modules, using `pytest` and mocked HTTP requests (no network access or API quota consumed during tests).
+
+```bash
+pip install pytest
+python3 -m pytest tests/ -v
+```
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
