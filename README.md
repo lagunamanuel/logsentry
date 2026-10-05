@@ -58,6 +58,7 @@ python3 -m logsentry.main -l /path/to/your/test.log
 | `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
 | `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
 | `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+| `--output` | `-o` | Export results to a CSV file with the given filename. |
 
 ### Examples
 
