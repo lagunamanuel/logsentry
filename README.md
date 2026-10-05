@@ -9,6 +9,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
 * **Rate Limit Aware:** Smartly handles VirusTotal's public API limits (4 requests/min) with built-in delays, preventing account bans.
 * **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
+* **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.
 
 ## ⚙️ Prerequisites
 
@@ -57,6 +58,7 @@ python3 -m logsentry.main -l /path/to/your/test.log
 | `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
 | `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
 | `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+| `--output` | `-o` | Export results to a CSV file with the given filename. |
 
 ### Examples
 
@@ -70,14 +72,26 @@ python3 -m logsentry.main -l auth.log -t 10
 python3 -m logsentry.main -l auth.log --no-vt
 ```
 
+**3. Scan and export results to CSV:**
+```bash
+python3 -m logsentry.main -l auth.log -o results.csv
+```
+## 🧪 Testing
+
+LogSentry has a full unit test suite covering the parser, API client and reporter modules, using `pytest` and mocked HTTP requests (no network access or API quota consumed during tests).
+
+```bash
+pip install pytest
+python3 -m pytest tests/ -v
+```
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
 - [x] **Phase 2:** Argument parsing, rate-limit handling, and architecture refactoring.
-- [ ] **Phase 3:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
-- [ ] **Phase 4:** Export results to JSON/CSV formats for SIEM ingestion.
-- [ ] **Phase 5:** Native packaging for easier system-wide installation.
-
+- [x] **Phase 3:** CSV export for scan results.
+- [ ] **Phase 4:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
+- [ ] **Phase 5:** JSON export format for SIEM ingestion.
+- [ ] **Phase 6:** Native packaging (pip/PyPI) for easier installation.
 ## 📄 License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
