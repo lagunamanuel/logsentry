@@ -53,6 +53,7 @@ def main() -> None:
     for index, ip in enumerate(ips):
         if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
+            results.append({"ip": ip, "malicious_engines": "N/A"})
         else:
             print(f"\n[*] Checking IP: {ip}...")
             vt_data = check_ip_virustotal(ip)
