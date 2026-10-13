@@ -83,6 +83,10 @@ python3 -m logsentry.main -l auth.log -o results.csv
 
 ### Local mode (no API calls)
 ![Local mode](docs/screenshots/local-mode.png)
+
+### CSV export
+![CSV export](docs/screenshots/csv-export.png)
+
 ## 🧪 Testing
 
 LogSentry has a full unit test suite covering the parser, API client and reporter modules, using `pytest` and mocked HTTP requests (no network access or API quota consumed during tests).
