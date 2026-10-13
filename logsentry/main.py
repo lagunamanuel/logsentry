@@ -60,7 +60,7 @@ def main() -> None:
             result = evaluate_vt_data(ip, vt_data)
             results.append(result)
 
-        if index < total - 1 and not args.premium:
+        if index < total - 1 and not args.premium and not args.no_vt:
             for remaining in range(15, 0, -1):
                 print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
                 time.sleep(1)
