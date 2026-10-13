@@ -87,6 +87,8 @@ python3 -m logsentry.main -l auth.log -o results.csv
 ### CSV export
 ![CSV export](docs/screenshots/csv-export.png)
 
+### Test suite
+![Tests](docs/screenshots/tests.png)
 ## 🧪 Testing
 
 LogSentry has a full unit test suite covering the parser, API client and reporter modules, using `pytest` and mocked HTTP requests (no network access or API quota consumed during tests).
