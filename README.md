@@ -48,7 +48,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 Run the script by pointing it to a log file. By default, it will look for IPs with at least 5 occurrences.
 
 ```bash
-python3 -m logsentry.main -l /path/to/your/test.log
+logsentry -l /path/to/your/test.log
 ```
 
 ### Arguments
@@ -65,17 +65,17 @@ python3 -m logsentry.main -l /path/to/your/test.log
 
 **1. Basic scan with a custom threshold of 10:**
 ```bash
-python3 -m logsentry.main -l auth.log -t 10
+logsentry -l auth.log -t 10
 ```
 
 **2. Fast local parsing (no API calls):**
 ```bash
-python3 -m logsentry.main -l auth.log --no-vt
+logsentry -l auth.log --no-vt
 ```
 
 **3. Scan and export results to CSV:**
 ```bash
-python3 -m logsentry.main -l auth.log -o results.csv
+logsentry -l auth.log -o results.csv
 ```
 ## 📸 Screenshots
 
