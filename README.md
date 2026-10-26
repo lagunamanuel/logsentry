@@ -30,10 +30,11 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    source .venv/bin/activate
    ```
 
-3. **Install dependencies:**
+3. **Install LogSentry:**
    ```bash
-   pip install -r requirements.txt
+   pip install .
    ```
+   This installs the dependencies and registers the `logsentry` command.
 
 4. **Set up your environment variables:**
    You must export your VirusTotal API key before running the tool:
