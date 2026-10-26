@@ -43,6 +43,13 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    ```
    *(Tip: You can add this line to your `~/.bashrc` or `~/.zshrc` to make it persistent).*
 
+### Install globally (optional)
+
+To use `logsentry` from any terminal without activating a virtual environment, install it with [pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install .
+```
 ## 🛠️ Usage
 
 Run the script by pointing it to a log file. By default, it will look for IPs with at least 5 occurrences.
