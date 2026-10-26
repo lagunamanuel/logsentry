@@ -112,7 +112,8 @@ python3 -m pytest tests/ -v
 - [x] **Phase 3:** CSV export for scan results.
 - [ ] **Phase 4:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
-- [ ] **Phase 6:** Native packaging (pip/PyPI) for easier installation.
+- [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
+- [ ] **Phase 7:** Publish to PyPI.
 ## 📄 License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
