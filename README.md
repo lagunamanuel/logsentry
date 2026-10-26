@@ -13,7 +13,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 
 ## ⚙️ Prerequisites
 
-* Python 3.8 or higher.
+* Python 3.9 or higher.
 * A [VirusTotal API Key](https://www.virustotal.com/) (the free tier is fully supported).
 
 ## 🚀 Installation
@@ -30,10 +30,11 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    source .venv/bin/activate
    ```
 
-3. **Install dependencies:**
+3. **Install LogSentry:**
    ```bash
-   pip install -r requirements.txt
+   pip install .
    ```
+   This installs the dependencies and registers the `logsentry` command.
 
 4. **Set up your environment variables:**
    You must export your VirusTotal API key before running the tool:
@@ -42,12 +43,19 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    ```
    *(Tip: You can add this line to your `~/.bashrc` or `~/.zshrc` to make it persistent).*
 
+### Install globally (optional)
+
+To use `logsentry` from any terminal without activating a virtual environment, install it with [pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install .
+```
 ## 🛠️ Usage
 
 Run the script by pointing it to a log file. By default, it will look for IPs with at least 5 occurrences.
 
 ```bash
-python3 -m logsentry.main -l /path/to/your/test.log
+logsentry -l /path/to/your/test.log
 ```
 
 ### Arguments
@@ -64,17 +72,17 @@ python3 -m logsentry.main -l /path/to/your/test.log
 
 **1. Basic scan with a custom threshold of 10:**
 ```bash
-python3 -m logsentry.main -l auth.log -t 10
+logsentry -l auth.log -t 10
 ```
 
 **2. Fast local parsing (no API calls):**
 ```bash
-python3 -m logsentry.main -l auth.log --no-vt
+logsentry -l auth.log --no-vt
 ```
 
 **3. Scan and export results to CSV:**
 ```bash
-python3 -m logsentry.main -l auth.log -o results.csv
+logsentry -l auth.log -o results.csv
 ```
 ## 📸 Screenshots
 

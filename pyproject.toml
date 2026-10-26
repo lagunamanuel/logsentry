@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logsentry"
+version = "1.0.0"
+description = "CLI tool to detect suspicious IPs in log files and check them against VirusTotal"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["requests"]
+
+[project.scripts]
+logsentry = "logsentry.main:main"
+
+[tool.setuptools]
+packages = ["logsentry"]
