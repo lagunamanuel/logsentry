@@ -13,7 +13,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 
 ## ⚙️ Prerequisites
 
-* Python 3.8 or higher.
+* Python 3.9 or higher.
 * A [VirusTotal API Key](https://www.virustotal.com/) (the free tier is fully supported).
 
 ## 🚀 Installation
