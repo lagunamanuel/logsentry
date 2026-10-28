@@ -2,6 +2,22 @@ import re
 
 from collections import Counter
 
+# Markers that identify a failed SSH authentication attempt in auth logs
+FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
+
+
+def is_failed_login(line: str) -> bool:
+    """
+    Returns True if the log line records a failed authentication attempt.
+
+    Args:
+        line (str): A single line from the log file.
+
+    Returns:
+        bool: True if the line contains a known failed-login marker.
+    """
+    return any(marker in line for marker in FAILED_LOGIN_MARKERS)
+
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
