@@ -21,12 +21,12 @@ def is_failed_login(line: str) -> bool:
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
-    Reads a text log file and extracts valid IPv4 addresses
-    that exceed the given failure threshold.
+    Reads a text log file and extracts valid IPv4 addresses found in
+    failed-login lines (see `is_failed_login`) that reach the given threshold.
 
     Args:
         log_path (str): Path to the log file
-        threshold (int): Minimum number of occurrences required to extract an IP.
+        threshold (int): Minimum number of failed-login occurrences required to extract an IP.
 
     Returns:
         list: A list of string IPv4 addresses that met or exceeded the threshold.
