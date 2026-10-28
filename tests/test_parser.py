@@ -1,5 +1,4 @@
-from logsentry.parser import extract_ips_from_log
-
+from logsentry.parser import extract_ips_from_log, is_failed_login
 
 def test_extract_ips_above_threshold(tmp_path):
     """IPs occurring at or above the threshold should be flagged as suspicious."""
@@ -36,3 +35,18 @@ def test_extract_ips_file_not_found():
     """A missing log file should return an empty list instead of raising."""
     result = extract_ips_from_log("nonexistent.log", threshold=1)
     assert result == []
+
+def test_is_failed_login_failed_password():
+    assert is_failed_login("sshd[1]: Failed password for root from 1.2.3.4 port 22 ssh2")
+
+
+def test_is_failed_login_invalid_user():
+    assert is_failed_login("sshd[1]: Invalid user admin from 1.2.3.4 port 22")
+
+
+def test_is_failed_login_accepted_login_is_not_failed():
+    assert not is_failed_login("sshd[1]: Accepted password for manuel from 192.168.1.10 port 22 ssh2")
+
+
+def test_is_failed_login_unrelated_line():
+    assert not is_failed_login("kernel: eth0 link up, peer 10.0.0.1")
