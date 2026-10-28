@@ -40,7 +40,8 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
 
             ip_counts = Counter()
             for line in file:
-                ip_counts.update(re.findall(ipv4_pattern, line))
+                if is_failed_login(line):
+                    ip_counts.update(re.findall(ipv4_pattern, line))
 
             return [ip for ip, count in ip_counts.items() if count >= threshold]
 
