@@ -54,3 +54,12 @@ def test_is_failed_login_accepted_login_is_not_failed():
 def test_is_failed_login_unrelated_line():
     """Lines containing an IP but unrelated to authentication should be ignored."""
     assert not is_failed_login("kernel: eth0 link up, peer 10.0.0.1")
+
+def test_extract_ips_ignores_successful_logins(tmp_path):
+    log_file = tmp_path / "test.log"
+    log_file.write_text(
+        "sshd: Failed password for root from 1.2.3.4 port 22 ssh2\n" * 3
+        + "sshd: Accepted password for manuel from 192.168.1.10 port 22 ssh2\n" * 8
+    )
+    result = extract_ips_from_log(str(log_file), threshold=3)
+    assert result == ["1.2.3.4"]
