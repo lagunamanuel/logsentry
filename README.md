@@ -106,6 +106,12 @@ LogSentry has a full unit test suite covering the parser, API client and reporte
 pip install pytest
 python3 -m pytest tests/ -v
 ```
+## ⚠️ Known Limitations
+
+* **SSH-style logs only:** failed attempts are recognised by the markers `Failed password` and `Invalid user`. Logs from other services (nginx, Apache...) are not matched yet.
+* **Possible double counting:** sshd can log two lines for a single attempt against a non-existent user (`Invalid user ...` and `Failed password for invalid user ...`), so that attempt counts twice towards the threshold.
+* **IPv4 only:** IPv6 addresses are not detected.
+
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
