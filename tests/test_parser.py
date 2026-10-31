@@ -56,6 +56,7 @@ def test_is_failed_login_unrelated_line():
     assert not is_failed_login("kernel: eth0 link up, peer 10.0.0.1")
 
 def test_extract_ips_ignores_successful_logins(tmp_path):
+    """IPs that only appear in successful logins must not be flagged, even above the threshold."""
     log_file = tmp_path / "test.log"
     log_file.write_text(
         "sshd: Failed password for root from 1.2.3.4 port 22 ssh2\n" * 3
