@@ -2,15 +2,31 @@ import re
 
 from collections import Counter
 
+# Markers that identify a failed SSH authentication attempt in auth logs
+FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
+
+
+def is_failed_login(line: str) -> bool:
+    """
+    Returns True if the log line records a failed authentication attempt.
+
+    Args:
+        line (str): A single line from the log file.
+
+    Returns:
+        bool: True if the line contains a known failed-login marker.
+    """
+    return any(marker in line for marker in FAILED_LOGIN_MARKERS)
+
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
-    Reads a text log file and extracts valid IPv4 addresses
-    that exceed the given failure threshold.
+    Reads a text log file and extracts valid IPv4 addresses found in
+    failed-login lines (see `is_failed_login`) that reach the given threshold.
 
     Args:
         log_path (str): Path to the log file
-        threshold (int): Minimum number of occurrences required to extract an IP.
+        threshold (int): Minimum number of failed-login occurrences required to extract an IP.
 
     Returns:
         list: A list of string IPv4 addresses that met or exceeded the threshold.
@@ -24,7 +40,8 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
 
             ip_counts = Counter()
             for line in file:
-                ip_counts.update(re.findall(ipv4_pattern, line))
+                if is_failed_login(line):
+                    ip_counts.update(re.findall(ipv4_pattern, line))
 
             return [ip for ip, count in ip_counts.items() if count >= threshold]
 

@@ -5,6 +5,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 ## ✨ Features
 
 * **Strict Parsing:** Utilizes robust regular expressions to extract only valid IPv4 addresses.
+* **Failed-Login Detection:** Only counts IPs from failed authentication attempts (`Failed password`, `Invalid user`), so successful logins never trigger false positives.
 * **Threshold Control:** Filters out noise by only analyzing IPs that exceed a user-defined threshold of occurrences.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
 * **Rate Limit Aware:** Smartly handles VirusTotal's public API limits (4 requests/min) with built-in delays, preventing account bans.
@@ -105,14 +106,26 @@ LogSentry has a full unit test suite covering the parser, API client and reporte
 pip install pytest
 python3 -m pytest tests/ -v
 ```
+## ⚠️ Known Limitations
+
+* **SSH-style logs only:** failed attempts are recognised by the markers `Failed password` and `Invalid user`. Logs from other services (nginx, Apache...) are not matched yet.
+* **Possible double counting:** sshd can log two lines for a single attempt against a non-existent user (`Invalid user ...` and `Failed password for invalid user ...`), so that attempt counts twice towards the threshold.
+* **IPv4 only:** IPv6 addresses are not detected.
+
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
 - [x] **Phase 2:** Argument parsing, rate-limit handling, and architecture refactoring.
 - [x] **Phase 3:** CSV export for scan results.
-- [ ] **Phase 4:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
+- [ ] **Phase 4:** Smart log parsing
+  - [x] Count only failed login attempts (`Failed password`, `Invalid user`)
+  - [ ] Avoid double counting of a single attempt against an invalid user
+  - [ ] Skip private/reserved IPs in VirusTotal lookups
+  - [ ] Report targeted usernames per IP
+  - [ ] Time-window detection (N failures within M minutes)
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
-- [ ] **Phase 6:** Native packaging (pip/PyPI) for easier installation.
+- [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
+- [ ] **Phase 7:** Publish to PyPI.
 ## 📄 License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
