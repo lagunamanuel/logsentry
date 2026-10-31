@@ -117,7 +117,12 @@ python3 -m pytest tests/ -v
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
 - [x] **Phase 2:** Argument parsing, rate-limit handling, and architecture refactoring.
 - [x] **Phase 3:** CSV export for scan results.
-- [ ] **Phase 4:** Smart log parsing (e.g., distinguishing between failed SSH logins and generic errors).
+- [ ] **Phase 4:** Smart log parsing
+  - [x] Count only failed login attempts (`Failed password`, `Invalid user`)
+  - [ ] Avoid double counting of a single attempt against an invalid user
+  - [ ] Skip private/reserved IPs in VirusTotal lookups
+  - [ ] Report targeted usernames per IP
+  - [ ] Time-window detection (N failures within M minutes)
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
 - [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
 - [ ] **Phase 7:** Publish to PyPI.
