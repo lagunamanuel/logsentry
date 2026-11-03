@@ -66,22 +66,27 @@ def test_extract_ips_ignores_successful_logins(tmp_path):
     assert result == ["1.2.3.4"]
 
 def test_is_public_ip_public_address():
+    """A globally routable address should be classified as public."""
     assert is_public_ip("8.8.8.8")
 
 
 def test_is_public_ip_private_ranges():
+    """RFC 1918 private ranges should not be classified as public."""
     assert not is_public_ip("192.168.1.10")
     assert not is_public_ip("10.0.0.5")
     assert not is_public_ip("172.16.0.1")
 
 
 def test_is_public_ip_loopback():
+    """The loopback address should not be classified as public."""
     assert not is_public_ip("127.0.0.1")
 
 
 def test_is_public_ip_reserved_documentation_range():
+    """Reserved documentation ranges (TEST-NET) should not be classified as public."""
     assert not is_public_ip("198.51.100.23")
 
 
 def test_is_public_ip_invalid_string():
+    """Strings rejected by ipaddress (e.g. leading zeros) should return False, not raise."""
     assert not is_public_ip("001.2.3.4")
