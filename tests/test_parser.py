@@ -1,4 +1,4 @@
-from logsentry.parser import extract_ips_from_log, is_failed_login
+from logsentry.parser import extract_ips_from_log, is_failed_login, is_public_ip
 
 def test_extract_ips_above_threshold(tmp_path):
     """IPs occurring at or above the threshold should be flagged as suspicious."""
@@ -64,3 +64,24 @@ def test_extract_ips_ignores_successful_logins(tmp_path):
     )
     result = extract_ips_from_log(str(log_file), threshold=3)
     assert result == ["1.2.3.4"]
+
+def test_is_public_ip_public_address():
+    assert is_public_ip("8.8.8.8")
+
+
+def test_is_public_ip_private_ranges():
+    assert not is_public_ip("192.168.1.10")
+    assert not is_public_ip("10.0.0.5")
+    assert not is_public_ip("172.16.0.1")
+
+
+def test_is_public_ip_loopback():
+    assert not is_public_ip("127.0.0.1")
+
+
+def test_is_public_ip_reserved_documentation_range():
+    assert not is_public_ip("198.51.100.23")
+
+
+def test_is_public_ip_invalid_string():
+    assert not is_public_ip("001.2.3.4")
