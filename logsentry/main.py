@@ -2,7 +2,7 @@ import argparse
 import time
 import os
 
-from logsentry.parser import extract_ips_from_log
+from logsentry.parser import extract_ips_from_log, is_public_ip
 from logsentry.api import check_ip_virustotal
 
 
@@ -53,6 +53,9 @@ def main() -> None:
     for index, ip in enumerate(ips):
         if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
             print(f"[*] IP {ip} found (Skipping VirusTotal)")
+            results.append({"ip": ip, "malicious_engines": "N/A"})
+        elif not is_public_ip(ip):
+            print(f"[*] IP {ip} is not publicly routable, skipping VirusTotal")
             results.append({"ip": ip, "malicious_engines": "N/A"})
         else:
             print(f"\n[*] Checking IP: {ip}...")
