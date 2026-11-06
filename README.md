@@ -121,7 +121,7 @@ python3 -m pytest tests/ -v
 - [ ] **Phase 4:** Smart log parsing
   - [x] Count only failed login attempts (`Failed password`, `Invalid user`)
   - [ ] Avoid double counting of a single attempt against an invalid user
-  - [ ] Skip private/reserved IPs in VirusTotal lookups
+  - [x] Skip private/reserved IPs in VirusTotal lookups
   - [ ] Report targeted usernames per IP
   - [ ] Time-window detection (N failures within M minutes)
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
