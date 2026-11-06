@@ -1,6 +1,7 @@
 import re
 
 from collections import Counter
+import ipaddress
 
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
@@ -18,6 +19,23 @@ def is_failed_login(line: str) -> bool:
     """
     return any(marker in line for marker in FAILED_LOGIN_MARKERS)
 
+def is_public_ip(ip: str) -> bool:
+    """
+    Returns True if the IP is globally routable on the internet.
+
+    Private ranges (192.168.x.x, 10.x.x.x...), loopback and reserved
+    blocks return False. Strings that are not valid IPs also return False.
+
+    Args:
+        ip (str): The IPv4 address to classify.
+
+    Returns:
+        bool: True if the address is public, False otherwise.
+    """
+    try:
+        return ipaddress.ip_address(ip).is_global
+    except ValueError:
+        return False
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
