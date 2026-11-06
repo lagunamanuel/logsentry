@@ -8,6 +8,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * **Failed-Login Detection:** Only counts IPs from failed authentication attempts (`Failed password`, `Invalid user`), so successful logins never trigger false positives.
 * **Threshold Control:** Filters out noise by only analyzing IPs that exceed a user-defined threshold of occurrences.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
+* **Private IP Handling:** Private, loopback and reserved addresses are still listed in the output and the CSV, but are never sent to VirusTotal, saving API quota and avoiding misleading "clean" results.
 * **Rate Limit Aware:** Smartly handles VirusTotal's public API limits (4 requests/min) with built-in delays, preventing account bans.
 * **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
 * **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.
