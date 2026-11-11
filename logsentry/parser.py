@@ -2,9 +2,20 @@ import re
 
 from collections import Counter
 import ipaddress
+from datetime import datetime
+from typing import Optional
 
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+# Classic syslog timestamp, e.g. "Jul 20 08:12:01" (the log line carries no year)
+SYSLOG_TIMESTAMP = re.compile(r'^(' + '|'.join(MONTHS) + r')\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})')
+
+# ISO 8601 timestamp, e.g. "2026-07-20T08:12:01+02:00"
+ISO_TIMESTAMP = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?')
 
 
 def is_failed_login(line: str) -> bool:
@@ -18,6 +29,7 @@ def is_failed_login(line: str) -> bool:
         bool: True if the line contains a known failed-login marker.
     """
     return any(marker in line for marker in FAILED_LOGIN_MARKERS)
+
 
 def is_public_ip(ip: str) -> bool:
     """
@@ -37,6 +49,43 @@ def is_public_ip(ip: str) -> bool:
     except ValueError:
         return False
 
+
+def parse_timestamp(line: str, year: Optional[int] = None) -> Optional[datetime]:
+    """
+    Extracts the timestamp at the start of a log line.
+
+    Supports classic syslog ("Jul 20 08:12:01") and ISO 8601
+    ("2026-07-20T08:12:01+02:00") formats. Syslog lines carry no year,
+    so `year` is used (defaults to the current year).
+
+    Args:
+        line (str): A single line from the log file.
+        year (Optional[int]): Year to assume for syslog timestamps.
+
+    Returns:
+        Optional[datetime]: The parsed timestamp, or None if the line has
+        no recognisable timestamp.
+    """
+    iso = ISO_TIMESTAMP.match(line)
+    if iso:
+        try:
+            # fromisoformat rejects a trailing "Z" before Python 3.11
+            return datetime.fromisoformat(iso.group().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    syslog = SYSLOG_TIMESTAMP.match(line)
+    if syslog:
+        month, day, hour, minute, second = syslog.groups()
+        try:
+            return datetime(year or datetime.now().year, MONTHS.index(month) + 1,
+                            int(day), int(hour), int(minute), int(second))
+        except ValueError:
+            return None
+
+    return None
+
+
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
     Reads a text log file and extracts valid IPv4 addresses found in
@@ -50,8 +99,7 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
         list: A list of string IPv4 addresses that met or exceeded the threshold.
     """
 
-
-                #            250-255|200-249 |0-199         *3    250-255|200-249 |0-199
+    #            250-255|200-249 |0-199         *3    250-255|200-249 |0-199
     ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
     try:
         with open(log_path, 'r') as file:
