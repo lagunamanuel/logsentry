@@ -1,4 +1,7 @@
-from logsentry.parser import extract_ips_from_log, is_failed_login, is_public_ip
+from datetime import datetime, timedelta, timezone
+
+from logsentry.parser import extract_ips_from_log, is_failed_login, is_public_ip, parse_timestamp
+
 
 def test_extract_ips_above_threshold(tmp_path):
     """IPs occurring at or above the threshold should be flagged as suspicious."""
@@ -36,6 +39,7 @@ def test_extract_ips_file_not_found():
     result = extract_ips_from_log("nonexistent.log", threshold=1)
     assert result == []
 
+
 def test_is_failed_login_failed_password():
     """A 'Failed password' line should be recognised as a failed login."""
     assert is_failed_login("sshd[1]: Failed password for root from 1.2.3.4 port 22 ssh2")
@@ -55,6 +59,7 @@ def test_is_failed_login_unrelated_line():
     """Lines containing an IP but unrelated to authentication should be ignored."""
     assert not is_failed_login("kernel: eth0 link up, peer 10.0.0.1")
 
+
 def test_extract_ips_ignores_successful_logins(tmp_path):
     """IPs that only appear in successful logins must not be flagged, even above the threshold."""
     log_file = tmp_path / "test.log"
@@ -64,6 +69,7 @@ def test_extract_ips_ignores_successful_logins(tmp_path):
     )
     result = extract_ips_from_log(str(log_file), threshold=3)
     assert result == ["1.2.3.4"]
+
 
 def test_is_public_ip_public_address():
     """A globally routable address should be classified as public."""
@@ -90,3 +96,39 @@ def test_is_public_ip_reserved_documentation_range():
 def test_is_public_ip_invalid_string():
     """Strings rejected by ipaddress (e.g. leading zeros) should return False, not raise."""
     assert not is_public_ip("001.2.3.4")
+def test_parse_timestamp_syslog_uses_given_year():
+    result = parse_timestamp("Jul 20 08:12:01 srv sshd[1]: Failed password", year=2026)
+    assert result == datetime(2026, 7, 20, 8, 12, 1)
+
+
+def test_parse_timestamp_syslog_single_digit_day():
+    result = parse_timestamp("Jul  5 08:12:01 srv sshd[1]: x", year=2026)
+    assert result == datetime(2026, 7, 5, 8, 12, 1)
+
+
+def test_parse_timestamp_syslog_defaults_to_current_year():
+    result = parse_timestamp("Jul 20 08:12:01 srv sshd[1]: x")
+    assert result.year == datetime.now().year
+
+
+def test_parse_timestamp_iso_with_offset():
+    result = parse_timestamp("2026-07-20T08:12:01+02:00 srv sshd[1]: x")
+    assert result == datetime(2026, 7, 20, 8, 12, 1, tzinfo=timezone(timedelta(hours=2)))
+
+
+def test_parse_timestamp_iso_zulu():
+    result = parse_timestamp("2026-07-20T08:12:01Z srv sshd[1]: x")
+    assert result == datetime(2026, 7, 20, 8, 12, 1, tzinfo=timezone.utc)
+
+
+def test_parse_timestamp_iso_fractional_seconds():
+    result = parse_timestamp("2026-07-20T08:12:01.123456+02:00 srv sshd[1]: x")
+    assert result == datetime(2026, 7, 20, 8, 12, 1, 123456, tzinfo=timezone(timedelta(hours=2)))
+
+
+def test_parse_timestamp_no_timestamp_returns_none():
+    assert parse_timestamp("sshd[1]: Failed password for root") is None
+
+
+def test_parse_timestamp_invalid_date_returns_none():
+    assert parse_timestamp("Feb 30 08:12:01 srv sshd[1]: x", year=2026) is None
