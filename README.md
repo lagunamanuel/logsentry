@@ -128,6 +128,10 @@ python3 -m pytest tests/ -v
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
 - [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
 - [ ] **Phase 7:** Publish to PyPI.
+- [ ] **Phase 8 (research):** Behaviour-based anomaly detection with an optional local ML model
+  - [ ] Per-IP feature extraction (failures, distinct usernames, time between attempts)
+  - [ ] Evaluate against the rule-based detector on labelled data
+  - [ ] Optional install: `pip install logsentry[ml]`
 ## 📄 License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
