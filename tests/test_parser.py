@@ -96,39 +96,48 @@ def test_is_public_ip_reserved_documentation_range():
 def test_is_public_ip_invalid_string():
     """Strings rejected by ipaddress (e.g. leading zeros) should return False, not raise."""
     assert not is_public_ip("001.2.3.4")
+
 def test_parse_timestamp_syslog_uses_given_year():
+    """Syslog timestamps carry no year, so the provided year should be applied."""
     result = parse_timestamp("Jul 20 08:12:01 srv sshd[1]: Failed password", year=2026)
     assert result == datetime(2026, 7, 20, 8, 12, 1)
 
 
 def test_parse_timestamp_syslog_single_digit_day():
+    """Syslog pads single-digit days with an extra space, which should still parse."""
     result = parse_timestamp("Jul  5 08:12:01 srv sshd[1]: x", year=2026)
     assert result == datetime(2026, 7, 5, 8, 12, 1)
 
 
 def test_parse_timestamp_syslog_defaults_to_current_year():
+    """Without an explicit year, syslog timestamps should default to the current year."""
     result = parse_timestamp("Jul 20 08:12:01 srv sshd[1]: x")
     assert result.year == datetime.now().year
 
 
 def test_parse_timestamp_iso_with_offset():
+    """ISO 8601 timestamps with a UTC offset should keep their timezone."""
     result = parse_timestamp("2026-07-20T08:12:01+02:00 srv sshd[1]: x")
     assert result == datetime(2026, 7, 20, 8, 12, 1, tzinfo=timezone(timedelta(hours=2)))
 
 
 def test_parse_timestamp_iso_zulu():
+    """A trailing 'Z' should be interpreted as UTC."""
     result = parse_timestamp("2026-07-20T08:12:01Z srv sshd[1]: x")
     assert result == datetime(2026, 7, 20, 8, 12, 1, tzinfo=timezone.utc)
 
 
 def test_parse_timestamp_iso_fractional_seconds():
+    """Fractional seconds in ISO 8601 timestamps should be preserved."""
     result = parse_timestamp("2026-07-20T08:12:01.123456+02:00 srv sshd[1]: x")
     assert result == datetime(2026, 7, 20, 8, 12, 1, 123456, tzinfo=timezone(timedelta(hours=2)))
 
 
 def test_parse_timestamp_no_timestamp_returns_none():
+    """Lines without a leading timestamp should return None."""
     assert parse_timestamp("sshd[1]: Failed password for root") is None
 
 
 def test_parse_timestamp_invalid_date_returns_none():
+    """Impossible dates (e.g. Feb 30) should return None instead of raising."""
     assert parse_timestamp("Feb 30 08:12:01 srv sshd[1]: x", year=2026) is None
