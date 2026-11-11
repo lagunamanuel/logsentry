@@ -124,6 +124,7 @@ python3 -m pytest tests/ -v
   - [x] Skip private/reserved IPs in VirusTotal lookups
   - [ ] Report targeted usernames per IP
   - [ ] Time-window detection (N failures within M minutes)
+  - [ ] Structured event parsing (timestamp, username, event type)
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
 - [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
 - [ ] **Phase 7:** Publish to PyPI.
