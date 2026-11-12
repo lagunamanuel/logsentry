@@ -27,13 +27,25 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
-    parser.add_argument("-t", "--threshold", type=int, default=5,
-                        help="Minimum number of failed attempts to consider an IP suspicious")
+    parser.add_argument("-t", "--threshold", type=int, default=5, help="Minimum number of failed attempts to consider an IP suspicious")
+    parser.add_argument("--window",type=int,default=None,metavar="SECONDS",help="Require the failed-login threshold per IP within this many seconds")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
     parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
 
     args = parser.parse_args()
+
+    if args.window is not None:
+        if args.window <= 0:
+            parser.exit(
+                2,
+                "[!] Error: --window must be a positive number of seconds\n",
+            )
+        if args.threshold <= 0:
+            parser.exit(
+                2,
+                "[!] Error: --threshold must be positive when --window is used\n",
+            )
 
     print(f"[*] Analyzing log file: {args.log}")
 
@@ -43,7 +55,14 @@ def main() -> None:
         print("[-] Or run the tool with --no-vt for local mode.")
         return
 
-    ips = extract_ips_from_log(args.log, args.threshold)
+    try:
+        ips = extract_ips_from_log(
+            args.log,
+            args.threshold,
+            window_seconds=args.window,
+        )
+    except ValueError as exc:
+        parser.exit(2, f"[!] Error: {exc}\n")
 
     print(f"[*] Found {len(ips)} unique IPs.")
 
