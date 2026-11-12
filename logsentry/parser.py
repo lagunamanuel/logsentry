@@ -2,7 +2,7 @@ import re
 
 from collections import Counter
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from dataclasses import dataclass
 
@@ -168,6 +168,49 @@ def parse_events(log_path: str, year: Optional[int] = None) -> list[LogEvent]:
                 events.append(event)
 
     return events
+
+def has_burst(
+    timestamps: list[datetime],
+    threshold: int,
+    window_seconds: int,
+) -> bool:
+    """
+    Checks whether enough timestamps fall within a time window.
+
+    The caller must supply failed-login timestamps for a single IP.
+    The window boundary is inclusive. Input order is not modified.
+
+    Args:
+        timestamps (list[datetime]): Timestamps to examine.
+        threshold (int): Minimum number of occurrences.
+        window_seconds (int): Maximum duration between first and last occurrence.
+
+    Returns:
+        bool: True if any group reaches the threshold within the window.
+
+    Raises:
+        ValueError: If threshold or window_seconds is not positive, or
+            timezone-aware and naive timestamps are mixed.
+    """
+    if threshold <= 0:
+        raise ValueError("threshold must be positive")
+
+    if window_seconds <= 0:
+        raise ValueError("window_seconds must be positive")
+
+    awareness = {timestamp.utcoffset() is not None for timestamp in timestamps}
+    if len(awareness) > 1:
+        raise ValueError("Cannot mix timezone-aware and naive timestamps")
+
+    ordered = sorted(timestamps)
+    window = timedelta(seconds=window_seconds)
+
+    for end in range(threshold - 1, len(ordered)):
+        start = end - threshold + 1
+        if ordered[end] - ordered[start] <= window:
+            return True
+
+    return False
 
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:

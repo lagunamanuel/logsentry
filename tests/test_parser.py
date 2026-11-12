@@ -3,6 +3,7 @@ import pytest
 from logsentry.parser import (
     LogEvent,
     extract_ips_from_log,
+    has_burst,
     is_failed_login,
     is_public_ip,
     parse_event,
@@ -330,3 +331,72 @@ def test_parse_events_missing_file_raises(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         parse_events(str(log_file), year=2026)
+
+@pytest.mark.parametrize(
+    "offsets, threshold, window_seconds, expected",
+    [
+        pytest.param([], 3, 60, False, id="empty"),
+        pytest.param([0, 10], 3, 60, False, id="below-threshold"),
+        pytest.param([0, 20, 40], 3, 60, True, id="within-window"),
+        pytest.param([0, 40, 80], 3, 60, False, id="outside-window"),
+        pytest.param([0, 30, 60], 3, 60, True, id="exact-boundary"),
+        pytest.param(
+            [0, 30, 60.000001], 3, 60, False, id="just-outside-boundary",
+        ),
+        pytest.param(
+            [0, 100, 110, 120], 3, 30, True, id="burst-later-in-log",
+        ),
+        pytest.param([40, 0, 20], 3, 60, True, id="unordered"),
+        pytest.param([0, 0, 0], 3, 1, True, id="same-timestamp"),
+        pytest.param([0], 1, 60, True, id="threshold-one"),
+    ],
+)
+def test_has_burst_detects_time_windows(
+    offsets, threshold, window_seconds, expected,
+):
+    """Detect bursts across boundary cases without modifying the input."""
+    base = datetime(2026, 7, 20, 8, 0, 0)
+    timestamps = [base + timedelta(seconds=offset) for offset in offsets]
+    original = timestamps.copy()
+
+    assert has_burst(timestamps, threshold, window_seconds) is expected
+    assert timestamps == original
+
+
+@pytest.mark.parametrize(
+    "threshold, window_seconds",
+    [
+        (0, 60),
+        (-1, 60),
+        (3, 0),
+        (3, -1),
+    ],
+)
+def test_has_burst_rejects_non_positive_parameters(threshold, window_seconds):
+    """Threshold and window duration must both be positive."""
+    with pytest.raises(ValueError):
+        has_burst([], threshold, window_seconds)
+
+
+def test_has_burst_compares_different_timezone_offsets():
+    """Aware timestamps should be compared by their actual instant."""
+    timestamps = [
+        datetime(2026, 7, 20, 8, 0, 0, tzinfo=timezone.utc),
+        datetime(
+            2026, 7, 20, 10, 0, 30,
+            tzinfo=timezone(timedelta(hours=2)),
+        ),
+    ]
+
+    assert has_burst(timestamps, threshold=2, window_seconds=60)
+
+
+def test_has_burst_rejects_mixed_timezone_awareness():
+    """Naive and aware timestamps cannot be compared without a timezone policy."""
+    timestamps = [
+        datetime(2026, 7, 20, 8, 0, 0),
+        datetime(2026, 7, 20, 8, 0, 30, tzinfo=timezone.utc),
+    ]
+
+    with pytest.raises(ValueError, match="timezone-aware and naive"):
+        has_burst(timestamps, threshold=2, window_seconds=60)
