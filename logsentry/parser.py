@@ -1,12 +1,17 @@
 import re
 
-from collections import Counter
+from collections import Counter, defaultdict
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
+from dataclasses import dataclass
 
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
+
+# Matches an IPv4 address, validating each octet is between 0-255:
+# (250-255 | 200-249 | 0-199) three times followed by a dot, then once more
+IPV4_PATTERN = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -16,6 +21,25 @@ SYSLOG_TIMESTAMP = re.compile(r'^(' + '|'.join(MONTHS) + r')\s+(\d{1,2})\s+(\d{2
 
 # ISO 8601 timestamp, e.g. "2026-07-20T08:12:01+02:00"
 ISO_TIMESTAMP = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?')
+
+# Matches failed/accepted SSH authentication lines, capturing username and IP:
+#   "Failed password for root from 1.2.3.4"
+#   "Failed password for invalid user admin from 1.2.3.4"
+#   "Accepted publickey for manuel from 1.2.3.4"
+#   "Invalid user admin from 1.2.3.4"
+EVENT_PATTERN = re.compile(
+    r'(?:(?P<kind>Failed|Accepted) \S+ for (?:invalid user )?|Invalid user )'
+    r'(?P<username>\S+) from (?P<ip>' + IPV4_PATTERN + r')'
+)
+
+
+@dataclass(frozen=True)
+class LogEvent:
+    """A parsed SSH authentication event."""
+    ip: str
+    kind: str  # "failed" or "accepted"
+    username: str
+    timestamp: Optional[datetime]
 
 
 def is_failed_login(line: str) -> bool:
@@ -34,6 +58,7 @@ def is_failed_login(line: str) -> bool:
 def is_public_ip(ip: str) -> bool:
     """
     Returns True if the IP is globally routable on the internet.
+
 
     Private ranges (192.168.x.x, 10.x.x.x...), loopback and reserved
     blocks return False. Strings that are not valid IPs also return False.
@@ -86,32 +111,167 @@ def parse_timestamp(line: str, year: Optional[int] = None) -> Optional[datetime]
     return None
 
 
-def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
+def parse_event(line: str, year: Optional[int] = None) -> Optional[LogEvent]:
     """
-    Reads a text log file and extracts valid IPv4 addresses found in
-    failed-login lines (see `is_failed_login`) that reach the given threshold.
+    Parses a single log line into a LogEvent.
+
+    Recognises failed and accepted SSH authentication lines, including
+    attempts against non-existent users ("Invalid user ...").
 
     Args:
-        log_path (str): Path to the log file
-        threshold (int): Minimum number of failed-login occurrences required to extract an IP.
+        line (str): A single line from the log file.
+        year (Optional[int]): Year to assume for syslog timestamps.
 
     Returns:
-        list: A list of string IPv4 addresses that met or exceeded the threshold.
+        Optional[LogEvent]: The parsed event, or None if the line is not
+        an authentication event.
     """
+    match = EVENT_PATTERN.search(line)
+    if not match:
+        return None
 
-    #            250-255|200-249 |0-199         *3    250-255|200-249 |0-199
-    ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
+    kind = "accepted" if match.group("kind") == "Accepted" else "failed"
+    return LogEvent(
+        ip=match.group("ip"),
+        kind=kind,
+        username=match.group("username"),
+        timestamp=parse_timestamp(line, year),
+    )
+
+
+def parse_events(log_path: str, year: Optional[int] = None) -> list[LogEvent]:
+    """
+    Reads an SSH authentication log into structured events.
+
+    Preserves file order and events without timestamps.
+    Lines not recognised by parse_event are ignored.
+
+    Args:
+        log_path (str): Path to the log file.
+        year (Optional[int]): Year to assume for syslog timestamps.
+
+    Returns:
+        list[LogEvent]: Failed and accepted authentication events.
+
+    Raises:
+        OSError: If the log file cannot be opened or read.
+    """
+    if year is None:
+        year = datetime.now().year
+
+    events = []
+
+    with open(log_path, "r", encoding="utf-8") as file:
+        for line in file:
+            event = parse_event(line, year)
+            if event is not None:
+                events.append(event)
+
+    return events
+
+def has_burst(
+    timestamps: list[datetime],
+    threshold: int,
+    window_seconds: int,
+) -> bool:
+    """
+    Checks whether enough timestamps fall within a time window.
+
+    The caller must supply failed-login timestamps for a single IP.
+    The window boundary is inclusive. Input order is not modified.
+
+    Args:
+        timestamps (list[datetime]): Timestamps to examine.
+        threshold (int): Minimum number of occurrences.
+        window_seconds (int): Maximum duration between first and last occurrence.
+
+    Returns:
+        bool: True if any group reaches the threshold within the window.
+
+    Raises:
+        ValueError: If threshold or window_seconds is not positive, or
+            timezone-aware and naive timestamps are mixed.
+    """
+    if threshold <= 0:
+        raise ValueError("threshold must be positive")
+
+    if window_seconds <= 0:
+        raise ValueError("window_seconds must be positive")
+
+    awareness = {timestamp.utcoffset() is not None for timestamp in timestamps}
+    if len(awareness) > 1:
+        raise ValueError("Cannot mix timezone-aware and naive timestamps")
+
+    ordered = sorted(timestamps)
+    window = timedelta(seconds=window_seconds)
+
+    for end in range(threshold - 1, len(ordered)):
+        start = end - threshold + 1
+        if ordered[end] - ordered[start] <= window:
+            return True
+
+    return False
+
+
+def extract_ips_from_log(
+    log_path: str,
+    threshold: int = 5,
+    *,
+    window_seconds: Optional[int] = None,
+) -> list:
+    """
+    Extracts IPs whose failed-login occurrences reach the threshold.
+
+    Without a window, preserves the existing marker-based counting.
+    With a window, counts only structured failed events with timestamps,
+    grouped by IP.
+
+    Args:
+        log_path (str): Path to the log file.
+        threshold (int): Minimum number of failed-login occurrences.
+        window_seconds (Optional[int]): Maximum duration of a burst.
+            None disables time-window detection.
+
+    Returns:
+        list: IPs that reach the threshold, or an empty list if the
+            log file does not exist.
+
+    Raises:
+        ValueError: In window mode, if threshold or window_seconds is
+            not positive, or timestamps for an IP mix timezone-aware
+            and naive datetimes.
+    """
+    if window_seconds is not None:
+        if threshold <= 0:
+            raise ValueError("threshold must be positive")
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+
     try:
-        with open(log_path, 'r') as file:
+        if window_seconds is not None:
+            timestamps_by_ip = defaultdict(list)
 
+            for event in parse_events(log_path):
+                if event.kind == "failed" and event.timestamp is not None:
+                    timestamps_by_ip[event.ip].append(event.timestamp)
+
+            return [
+                ip
+                for ip, timestamps in timestamps_by_ip.items()
+                if has_burst(timestamps, threshold, window_seconds)
+            ]
+
+        with open(log_path, "r") as file:
             ip_counts = Counter()
             for line in file:
                 if is_failed_login(line):
-                    ip_counts.update(re.findall(ipv4_pattern, line))
+                    ip_counts.update(re.findall(IPV4_PATTERN, line))
 
-            return [ip for ip, count in ip_counts.items() if count >= threshold]
+            return [
+                ip for ip, count in ip_counts.items()
+                if count >= threshold
+            ]
 
     except FileNotFoundError:
         print(f"Error: Log file not found at {log_path}")
-
         return []
