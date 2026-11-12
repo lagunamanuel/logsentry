@@ -8,6 +8,10 @@ from typing import Optional
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
 
+# Matches an IPv4 address, validating each octet is between 0-255:
+# (250-255 | 200-249 | 0-199) three times followed by a dot, then once more
+IPV4_PATTERN = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
+
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -34,6 +38,7 @@ def is_failed_login(line: str) -> bool:
 def is_public_ip(ip: str) -> bool:
     """
     Returns True if the IP is globally routable on the internet.
+
 
     Private ranges (192.168.x.x, 10.x.x.x...), loopback and reserved
     blocks return False. Strings that are not valid IPs also return False.
@@ -99,15 +104,14 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
         list: A list of string IPv4 addresses that met or exceeded the threshold.
     """
 
-    #            250-255|200-249 |0-199         *3    250-255|200-249 |0-199
-    ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
+
     try:
         with open(log_path, 'r') as file:
 
             ip_counts = Counter()
             for line in file:
                 if is_failed_login(line):
-                    ip_counts.update(re.findall(ipv4_pattern, line))
+                    ip_counts.update(re.findall(IPV4_PATTERN, line))
 
             return [ip for ip, count in ip_counts.items() if count >= threshold]
 
