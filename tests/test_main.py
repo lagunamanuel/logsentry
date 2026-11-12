@@ -10,10 +10,11 @@ from logsentry.main import main
     [
         ([], 5, None),
         (["-t", "3", "--window", "60"], 3, 60),
+        (["-t", "3", "-w", "60"], 3, 60),
     ],
 )
 def test_main_passes_detection_parameters(
-    monkeypatch, capsys, extra_args, threshold, window_seconds,
+        monkeypatch, capsys, extra_args, threshold, window_seconds,
 ):
     """Forward detection parameters without querying VT in local mode."""
     monkeypatch.delenv("VT_API_KEY", raising=False)
@@ -42,33 +43,37 @@ def test_main_passes_detection_parameters(
     "extra_args, expected_error",
     [
         (
-            ["--window", "0"],
-            "[!] Error: --window must be a positive number of seconds",
+                ["--window", "0"],
+                "[!] Error: --window must be a positive number of seconds",
         ),
         (
-            ["--window", "-1"],
-            "[!] Error: --window must be a positive number of seconds",
+                ["--window", "-1"],
+                "[!] Error: --window must be a positive number of seconds",
         ),
         (
-            ["--window", "abc"],
-            "argument --window: invalid int value",
+                ["--window", "abc"],
+                "invalid int value: 'abc'",
         ),
         (
-            ["--window", "1.5"],
-            "argument --window: invalid int value",
+                ["--window", "1.5"],
+                "invalid int value: '1.5'",
         ),
         (
-            ["--window", "60", "--threshold", "0"],
-            "[!] Error: --threshold must be positive when --window is used",
+                ["--window", "60", "--threshold", "0"],
+                "[!] Error: --threshold must be positive when --window is used",
         ),
         (
-            ["--window", "60", "--threshold", "-1"],
-            "[!] Error: --threshold must be positive when --window is used",
+                ["--window", "60", "--threshold", "-1"],
+                "[!] Error: --threshold must be positive when --window is used",
+        ),
+        (
+                ["-w", "0"],
+                "[!] Error: --window must be a positive number of seconds",
         ),
     ],
 )
 def test_main_rejects_invalid_window_arguments(
-    monkeypatch, capsys, extra_args, expected_error,
+        monkeypatch, capsys, extra_args, expected_error,
 ):
     """Reject invalid arguments before reading the log."""
     monkeypatch.setattr(
@@ -94,8 +99,8 @@ def test_main_reports_incompatible_timestamps(monkeypatch, capsys):
     message = "Cannot mix timezone-aware and naive timestamps"
 
     with patch(
-        "logsentry.main.extract_ips_from_log",
-        side_effect=ValueError(message),
+            "logsentry.main.extract_ips_from_log",
+            side_effect=ValueError(message),
     ):
         with pytest.raises(SystemExit) as exc:
             main()
@@ -109,10 +114,11 @@ def test_main_reports_incompatible_timestamps(monkeypatch, capsys):
     [
         ([], ["1.2.3.4", "5.6.7.8"]),
         (["--window", "60"], ["1.2.3.4"]),
+        (["-w", "60"], ["1.2.3.4"]),
     ],
 )
 def test_main_local_scan_and_csv(
-    tmp_path, monkeypatch, capsys, extra_args, expected_ips,
+        tmp_path, monkeypatch, capsys, extra_args, expected_ips,
 ):
     """Check real parsing and CSV export with and without a window."""
     log_file = tmp_path / "auth.log"
@@ -149,6 +155,6 @@ def test_main_local_scan_and_csv(
         *[f"{ip},N/A" for ip in expected_ips],
     ]
     assert (
-        f"Found {len(expected_ips)} unique IPs."
-        in capsys.readouterr().out
+            f"Found {len(expected_ips)} unique IPs."
+            in capsys.readouterr().out
     )
