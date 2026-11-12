@@ -67,8 +67,8 @@ logsentry -l /path/to/your/test.log
 | :--- | :--- | :--- |
 | `--log` | `-l` | **(Required)** Path to the log file to analyze. |
 | `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
-| `--window` | `-w` | Require the threshold per IP within this many seconds. Must be a positive integer. Disabled by default. || `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
-| `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+| `--window` | `-w` | Require the threshold per IP within this many seconds. Must be a positive integer. Disabled by default. |
+| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). || `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
 | `--output` | `-o` | Export results to a CSV file with the given filename. |
 
 ### Examples
@@ -147,7 +147,7 @@ python3 -m pytest tests/ -v
   - [ ] Avoid double counting of a single attempt against an invalid user
   - [x] Skip private/reserved IPs in VirusTotal lookups
   - [ ] Report targeted usernames per IP
-  - [x] Time-window detection (N failures within M minutes)
+  - [x] Time-window detection (N failures within M seconds)
   - [x] Structured event parsing (timestamp, username, event type)
 - [ ] **Phase 5:** JSON export format for SIEM ingestion.
 - [x] **Phase 6:** Installable as a `logsentry` command (pip/pipx) with wheel published in GitHub Releases.
