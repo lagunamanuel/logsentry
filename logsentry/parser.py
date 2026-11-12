@@ -4,6 +4,8 @@ from collections import Counter
 import ipaddress
 from datetime import datetime
 from typing import Optional
+from dataclasses import dataclass
+
 
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
@@ -21,6 +23,24 @@ SYSLOG_TIMESTAMP = re.compile(r'^(' + '|'.join(MONTHS) + r')\s+(\d{1,2})\s+(\d{2
 # ISO 8601 timestamp, e.g. "2026-07-20T08:12:01+02:00"
 ISO_TIMESTAMP = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?')
 
+# Matches failed/accepted SSH authentication lines, capturing username and IP:
+#   "Failed password for root from 1.2.3.4"
+#   "Failed password for invalid user admin from 1.2.3.4"
+#   "Accepted publickey for manuel from 1.2.3.4"
+#   "Invalid user admin from 1.2.3.4"
+EVENT_PATTERN = re.compile(
+    r'(?:(?P<kind>Failed|Accepted) \S+ for (?:invalid user )?|Invalid user )'
+    r'(?P<username>\S+) from (?P<ip>' + IPV4_PATTERN + r')'
+)
+
+
+@dataclass(frozen=True)
+class LogEvent:
+    """A parsed SSH authentication event."""
+    ip: str
+    kind: str  # "failed" or "accepted"
+    username: str
+    timestamp: Optional[datetime]
 
 def is_failed_login(line: str) -> bool:
     """
@@ -90,6 +110,32 @@ def parse_timestamp(line: str, year: Optional[int] = None) -> Optional[datetime]
 
     return None
 
+def parse_event(line: str, year: Optional[int] = None) -> Optional[LogEvent]:
+    """
+    Parses a single log line into a LogEvent.
+
+    Recognises failed and accepted SSH authentication lines, including
+    attempts against non-existent users ("Invalid user ...").
+
+    Args:
+        line (str): A single line from the log file.
+        year (Optional[int]): Year to assume for syslog timestamps.
+
+    Returns:
+        Optional[LogEvent]: The parsed event, or None if the line is not
+        an authentication event.
+    """
+    match = EVENT_PATTERN.search(line)
+    if not match:
+        return None
+
+    kind = "accepted" if match.group("kind") == "Accepted" else "failed"
+    return LogEvent(
+        ip=match.group("ip"),
+        kind=kind,
+        username=match.group("username"),
+        timestamp=parse_timestamp(line, year),
+    )
 
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
