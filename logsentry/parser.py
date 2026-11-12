@@ -1,6 +1,6 @@
 import re
 
-from collections import Counter
+from collections import Counter, defaultdict
 import ipaddress
 from datetime import datetime, timedelta
 from typing import Optional
@@ -213,30 +213,65 @@ def has_burst(
     return False
 
 
-def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
+def extract_ips_from_log(
+    log_path: str,
+    threshold: int = 5,
+    *,
+    window_seconds: Optional[int] = None,
+) -> list:
     """
-    Reads a text log file and extracts valid IPv4 addresses found in
-    failed-login lines (see `is_failed_login`) that reach the given threshold.
+    Extracts IPs whose failed-login occurrences reach the threshold.
+
+    Without a window, preserves the existing marker-based counting.
+    With a window, counts only structured failed events with timestamps,
+    grouped by IP.
 
     Args:
-        log_path (str): Path to the log file
-        threshold (int): Minimum number of failed-login occurrences required to extract an IP.
+        log_path (str): Path to the log file.
+        threshold (int): Minimum number of failed-login occurrences.
+        window_seconds (Optional[int]): Maximum duration of a burst.
+            None disables time-window detection.
 
     Returns:
-        list: A list of string IPv4 addresses that met or exceeded the threshold.
+        list: IPs that reach the threshold, or an empty list if the
+            log file does not exist.
+
+    Raises:
+        ValueError: In window mode, if threshold or window_seconds is
+            not positive, or timestamps for an IP mix timezone-aware
+            and naive datetimes.
     """
+    if window_seconds is not None:
+        if threshold <= 0:
+            raise ValueError("threshold must be positive")
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
 
     try:
-        with open(log_path, 'r') as file:
+        if window_seconds is not None:
+            timestamps_by_ip = defaultdict(list)
 
+            for event in parse_events(log_path):
+                if event.kind == "failed" and event.timestamp is not None:
+                    timestamps_by_ip[event.ip].append(event.timestamp)
+
+            return [
+                ip
+                for ip, timestamps in timestamps_by_ip.items()
+                if has_burst(timestamps, threshold, window_seconds)
+            ]
+
+        with open(log_path, "r") as file:
             ip_counts = Counter()
             for line in file:
                 if is_failed_login(line):
                     ip_counts.update(re.findall(IPV4_PATTERN, line))
 
-            return [ip for ip, count in ip_counts.items() if count >= threshold]
+            return [
+                ip for ip, count in ip_counts.items()
+                if count >= threshold
+            ]
 
     except FileNotFoundError:
         print(f"Error: Log file not found at {log_path}")
-
         return []

@@ -400,3 +400,113 @@ def test_has_burst_rejects_mixed_timezone_awareness():
 
     with pytest.raises(ValueError, match="timezone-aware and naive"):
         has_burst(timestamps, threshold=2, window_seconds=60)
+
+def test_extract_ips_window_groups_failures_by_ip(tmp_path):
+    """Only IPs independently reaching the threshold should be returned."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "2026-07-20T08:00:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:00:10 srv sshd[2]: "
+        "Failed password for root from 5.6.7.8 port 22 ssh2\n"
+        "2026-07-20T08:01:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:00:30 srv sshd[1]: "
+        "Failed password for admin from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:00:40 srv sshd[2]: "
+        "Failed password for root from 5.6.7.8 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    result = extract_ips_from_log(
+        str(log_file), threshold=3, window_seconds=60,
+    )
+
+    assert result == ["1.2.3.4"]
+
+
+def test_extract_ips_window_ignores_accepted_and_undated_events(tmp_path):
+    """Successful logins and failures without timestamps must not form a burst."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "2026-07-20T08:00:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:00:10 srv sshd[1]: "
+        "Accepted password for root from 1.2.3.4 port 22 ssh2\n"
+        "sshd[1]: Failed password for root from 1.2.3.4 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file), threshold=2, window_seconds=60,
+    ) == []
+    assert extract_ips_from_log(str(log_file), threshold=2) == ["1.2.3.4"]
+
+
+def test_extract_ips_window_excludes_spread_out_failures(tmp_path):
+    """Reaching the total threshold is insufficient when failures are too far apart."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "2026-07-20T08:00:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:02:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:04:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file), threshold=3, window_seconds=60,
+    ) == []
+    assert extract_ips_from_log(str(log_file), threshold=3) == ["1.2.3.4"]
+
+
+@pytest.mark.parametrize(
+    "threshold, window_seconds",
+    [
+        (0, 60),
+        (-1, 60),
+        (3, 0),
+        (3, -1),
+    ],
+)
+def test_extract_ips_window_rejects_invalid_parameters(
+    tmp_path, threshold, window_seconds,
+):
+    """Window parameters must be validated even when the log is empty."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        extract_ips_from_log(
+            str(log_file),
+            threshold=threshold,
+            window_seconds=window_seconds,
+        )
+
+
+def test_extract_ips_window_rejects_mixed_timezone_awareness(tmp_path):
+    """Timezone ambiguity for the same IP must not be silently resolved."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "2026-07-20T08:00:00 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "2026-07-20T08:00:30Z srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="timezone-aware and naive"):
+        extract_ips_from_log(
+            str(log_file), threshold=2, window_seconds=60,
+        )
+
+
+def test_extract_ips_window_missing_file_returns_empty_list(tmp_path):
+    """Window mode should preserve the existing missing-file behavior."""
+    log_file = tmp_path / "missing.log"
+
+    assert extract_ips_from_log(
+        str(log_file), threshold=3, window_seconds=60,
+    ) == []
