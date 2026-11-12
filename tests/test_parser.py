@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
-from logsentry.parser import extract_ips_from_log, is_failed_login, is_public_ip, parse_timestamp
-
+from logsentry.parser import (
+    LogEvent,
+    extract_ips_from_log,
+    is_failed_login,
+    is_public_ip,
+    parse_event,
+    parse_timestamp,
+)
 
 def test_extract_ips_above_threshold(tmp_path):
     """IPs occurring at or above the threshold should be flagged as suspicious."""
@@ -141,3 +147,118 @@ def test_parse_timestamp_no_timestamp_returns_none():
 def test_parse_timestamp_invalid_date_returns_none():
     """Impossible dates (e.g. Feb 30) should return None instead of raising."""
     assert parse_timestamp("Feb 30 08:12:01 srv sshd[1]: x", year=2026) is None
+
+def test_parse_event_failed_password():
+    """A failed password should produce an event with its IP, user and timestamp."""
+    line = (
+        "Jul 20 08:12:01 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2"
+    )
+
+    result = parse_event(line, year=2026)
+
+    assert result == LogEvent(
+        ip="1.2.3.4",
+        kind="failed",
+        username="root",
+        timestamp=datetime(2026, 7, 20, 8, 12, 1),
+    )
+
+
+def test_parse_event_failed_password_invalid_user():
+    """The 'invalid user' prefix should not become part of the username."""
+    line = (
+        "Jul 20 08:12:02 srv sshd[1]: "
+        "Failed password for invalid user admin from 1.2.3.4 port 22 ssh2"
+    )
+
+    result = parse_event(line, year=2026)
+
+    assert result == LogEvent(
+        ip="1.2.3.4",
+        kind="failed",
+        username="admin",
+        timestamp=datetime(2026, 7, 20, 8, 12, 2),
+    )
+
+
+def test_parse_event_invalid_user():
+    """An 'Invalid user' line should be classified as a failed event."""
+    line = (
+        "Jul 20 08:12:03 srv sshd[1]: "
+        "Invalid user test from 1.2.3.4 port 22"
+    )
+
+    result = parse_event(line, year=2026)
+
+    assert result == LogEvent(
+        ip="1.2.3.4",
+        kind="failed",
+        username="test",
+        timestamp=datetime(2026, 7, 20, 8, 12, 3),
+    )
+
+
+def test_parse_event_accepted_password():
+    """A successful password login should be classified as accepted."""
+    line = (
+        "Jul 20 08:12:04 srv sshd[1]: "
+        "Accepted password for manuel from 192.168.1.10 port 22 ssh2"
+    )
+
+    result = parse_event(line, year=2026)
+
+    assert result == LogEvent(
+        ip="192.168.1.10",
+        kind="accepted",
+        username="manuel",
+        timestamp=datetime(2026, 7, 20, 8, 12, 4),
+    )
+
+
+def test_parse_event_accepted_publickey():
+    """Successful public-key authentication should also be recognised."""
+    line = (
+        "Jul 20 08:12:05 srv sshd[1]: "
+        "Accepted publickey for manuel from 192.168.1.10 port 22 ssh2"
+    )
+
+    result = parse_event(line, year=2026)
+
+    assert result == LogEvent(
+        ip="192.168.1.10",
+        kind="accepted",
+        username="manuel",
+        timestamp=datetime(2026, 7, 20, 8, 12, 5),
+    )
+
+
+def test_parse_event_unrelated_line_returns_none():
+    """Lines unrelated to SSH authentication should not produce events."""
+    line = "Jul 20 08:12:06 srv kernel: eth0 link up, peer 1.2.3.4"
+
+    assert parse_event(line, year=2026) is None
+
+
+def test_parse_event_without_timestamp():
+    """An authentication event without a timestamp should still be preserved."""
+    line = "sshd[1]: Failed password for root from 1.2.3.4 port 22 ssh2"
+
+    result = parse_event(line)
+
+    assert result == LogEvent(
+        ip="1.2.3.4",
+        kind="failed",
+        username="root",
+        timestamp=None,
+    )
+
+
+def test_parse_event_invalid_ip_returns_none():
+    """An authentication line with invalid IPv4 octets should be ignored."""
+    line = (
+        "Jul 20 08:12:07 srv sshd[1]: "
+        "Failed password for root from 999.999.999.999 port 22 ssh2"
+    )
+
+    assert parse_event(line, year=2026) is None
