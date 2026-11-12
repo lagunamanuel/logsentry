@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
 
-
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
 
@@ -41,6 +40,7 @@ class LogEvent:
     kind: str  # "failed" or "accepted"
     username: str
     timestamp: Optional[datetime]
+
 
 def is_failed_login(line: str) -> bool:
     """
@@ -110,6 +110,7 @@ def parse_timestamp(line: str, year: Optional[int] = None) -> Optional[datetime]
 
     return None
 
+
 def parse_event(line: str, year: Optional[int] = None) -> Optional[LogEvent]:
     """
     Parses a single log line into a LogEvent.
@@ -137,6 +138,38 @@ def parse_event(line: str, year: Optional[int] = None) -> Optional[LogEvent]:
         timestamp=parse_timestamp(line, year),
     )
 
+
+def parse_events(log_path: str, year: Optional[int] = None) -> list[LogEvent]:
+    """
+    Reads an SSH authentication log into structured events.
+
+    Preserves file order and events without timestamps.
+    Lines not recognised by parse_event are ignored.
+
+    Args:
+        log_path (str): Path to the log file.
+        year (Optional[int]): Year to assume for syslog timestamps.
+
+    Returns:
+        list[LogEvent]: Failed and accepted authentication events.
+
+    Raises:
+        OSError: If the log file cannot be opened or read.
+    """
+    if year is None:
+        year = datetime.now().year
+
+    events = []
+
+    with open(log_path, "r", encoding="utf-8") as file:
+        for line in file:
+            event = parse_event(line, year)
+            if event is not None:
+                events.append(event)
+
+    return events
+
+
 def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     """
     Reads a text log file and extracts valid IPv4 addresses found in
@@ -149,7 +182,6 @@ def extract_ips_from_log(log_path: str, threshold: int = 5) -> list:
     Returns:
         list: A list of string IPv4 addresses that met or exceeded the threshold.
     """
-
 
     try:
         with open(log_path, 'r') as file:

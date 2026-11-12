@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-
+import pytest
 from logsentry.parser import (
     LogEvent,
     extract_ips_from_log,
@@ -7,6 +7,8 @@ from logsentry.parser import (
     is_public_ip,
     parse_event,
     parse_timestamp,
+    parse_events,
+
 )
 
 def test_extract_ips_above_threshold(tmp_path):
@@ -262,3 +264,69 @@ def test_parse_event_invalid_ip_returns_none():
     )
 
     assert parse_event(line, year=2026) is None
+
+def test_parse_events_reads_authentication_events_in_file_order(tmp_path):
+    """Failed and accepted events should retain their order and parsed fields."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:12:02 srv sshd[1]: "
+        "Failed password for root from 1.2.3.4 port 22 ssh2\n"
+        "\n"
+        "Jul 20 08:12:03 srv kernel: eth0 link up\n"
+        "Jul 20 08:12:01 srv sshd[1]: "
+        "Accepted publickey for manuel from 192.168.1.10 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    result = parse_events(str(log_file), year=2026)
+
+    assert result == [
+        LogEvent(
+            ip="1.2.3.4",
+            kind="failed",
+            username="root",
+            timestamp=datetime(2026, 7, 20, 8, 12, 2),
+        ),
+        LogEvent(
+            ip="192.168.1.10",
+            kind="accepted",
+            username="manuel",
+            timestamp=datetime(2026, 7, 20, 8, 12, 1),
+        ),
+    ]
+
+
+def test_parse_events_preserves_events_without_timestamp(tmp_path):
+    """Missing timestamps should not cause authentication events to be discarded."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "sshd[1]: Invalid user admin from 1.2.3.4 port 22\n",
+        encoding="utf-8",
+    )
+
+    result = parse_events(str(log_file), year=2026)
+
+    assert result == [
+        LogEvent(
+            ip="1.2.3.4",
+            kind="failed",
+            username="admin",
+            timestamp=None,
+        ),
+    ]
+
+
+def test_parse_events_empty_file_returns_empty_list(tmp_path):
+    """An empty log should produce no authentication events."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text("", encoding="utf-8")
+
+    assert parse_events(str(log_file), year=2026) == []
+
+
+def test_parse_events_missing_file_raises(tmp_path):
+    """A missing log should raise rather than look like an empty log."""
+    log_file = tmp_path / "missing.log"
+
+    with pytest.raises(FileNotFoundError):
+        parse_events(str(log_file), year=2026)
