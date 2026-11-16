@@ -1,8 +1,10 @@
 from unittest.mock import patch
 
 import pytest
-
+import requests
 from logsentry.main import evaluate_vt_data, main
+from unittest.mock import Mock, patch
+
 
 @pytest.mark.parametrize(
     "extra_args, threshold, window_seconds",
@@ -243,4 +245,53 @@ def test_main_exports_failed_vt_lookup_as_unavailable(tmp_path, monkeypatch):
     assert output_file.read_text().splitlines() == [
         "ip,malicious_engines",
         "8.8.8.8,N/A",
+    ]
+
+
+def test_main_continues_after_vt_timeout(tmp_path, monkeypatch):
+    """A failed lookup must not prevent later lookups or CSV export."""
+    log_file = tmp_path / "auth.log"
+    output_file = tmp_path / "results.csv"
+    log_file.write_text(
+        "sshd[1]: Failed password for root from 8.8.8.8 port 22 ssh2\n"
+        "sshd[2]: Failed password for root from 1.1.1.1 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "logsentry",
+            "-l", str(log_file),
+            "-t", "1",
+            "-o", str(output_file),
+        ],
+    )
+
+    successful_response = Mock(status_code=200)
+    successful_response.json.return_value = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": 0},
+            },
+        },
+    }
+
+    with (
+        patch(
+            "logsentry.api.requests.get",
+            side_effect=[
+                requests.exceptions.Timeout("simulated timeout"),
+                successful_response,
+            ],
+        ) as mock_get,
+        patch("logsentry.main.time.sleep"),
+    ):
+        main()
+
+    assert mock_get.call_count == 2
+    assert output_file.read_text().splitlines() == [
+        "ip,malicious_engines",
+        "8.8.8.8,N/A",
+        "1.1.1.1,0",
     ]
