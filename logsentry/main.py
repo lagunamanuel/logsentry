@@ -97,28 +97,38 @@ def main() -> None:
 
 def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
     """
-    Evaluates the VirusTotal API response, prints the results,
-    and returns a summary dict for reporting purposes.
+    Evaluates a VirusTotal response and returns a reporting summary.
+
+    Returns 'N/A' when a valid malicious-engine count is unavailable,
+    so failed lookups cannot be confused with zero detections.
 
     Args:
         ip (str): The IP address that was checked.
         vt_data (dict): The JSON response payload from VirusTotal.
 
     Returns:
-        dict: A dictionary with 'ip' and 'malicious_engines' keys.
+        dict: A summary with 'ip' and 'malicious_engines' keys.
     """
-    malicious = 0
+    try:
+        malicious = vt_data["data"]["attributes"]["last_analysis_stats"]["malicious"]
+    except (KeyError, TypeError):
+        malicious = None
 
-    if vt_data and "data" in vt_data:
-        stats = vt_data["data"]["attributes"]["last_analysis_stats"]
-        malicious = stats.get("malicious", 0)
+    if (
+        not isinstance(malicious, int)
+        or isinstance(malicious, bool)
+        or malicious < 0
+    ):
+        print(f"[!] Error: Could not retrieve valid VirusTotal data for {ip}")
+        return {"ip": ip, "malicious_engines": "N/A"}
 
-        if malicious > 0:
-            print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
-        else:
-            print(f"[-] IP {ip} -> VirusTotal: clean")
+    if malicious > 0:
+        print(
+            f"[!] Suspicious IP detected: {ip} -> "
+            f"VirusTotal: {malicious} engines flagged as malicious"
+        )
     else:
-        print(f"[-] Could not retrieve data for {ip}")
+        print(f"[-] IP {ip} -> VirusTotal: clean")
 
     return {"ip": ip, "malicious_engines": malicious}
 

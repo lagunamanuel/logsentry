@@ -2,8 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from logsentry.main import main
-
+from logsentry.main import evaluate_vt_data, main
 
 @pytest.mark.parametrize(
     "extra_args, threshold, window_seconds",
@@ -158,3 +157,90 @@ def test_main_local_scan_and_csv(
             f"Found {len(expected_ips)} unique IPs."
             in capsys.readouterr().out
     )
+
+@pytest.mark.parametrize(
+    "vt_data",
+    [
+        {},
+        {"data": {}},
+        {"data": {"attributes": {"last_analysis_stats": {}}}},
+    ],
+)
+def test_evaluate_vt_data_unavailable_is_not_clean(capsys, vt_data):
+    """Missing VT data must not become zero detections."""
+    result = evaluate_vt_data("8.8.8.8", vt_data)
+
+    assert result == {"ip": "8.8.8.8", "malicious_engines": "N/A"}
+    output = capsys.readouterr().out
+    assert "[!] Error:" in output
+    assert "VirusTotal: clean" not in output
+
+
+@pytest.mark.parametrize("malicious", [-1, "0", None, True])
+def test_evaluate_vt_data_rejects_invalid_counts(capsys, malicious):
+    """Only non-negative integer engine counts should be accepted."""
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": malicious},
+            },
+        },
+    }
+
+    result = evaluate_vt_data("8.8.8.8", vt_data)
+
+    assert result == {"ip": "8.8.8.8", "malicious_engines": "N/A"}
+    assert "VirusTotal: clean" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("malicious", [0, 3])
+def test_evaluate_vt_data_preserves_valid_counts(capsys, malicious):
+    """Valid zero and positive detection counts should retain their meaning."""
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": malicious},
+            },
+        },
+    }
+
+    result = evaluate_vt_data("8.8.8.8", vt_data)
+
+    assert result == {"ip": "8.8.8.8", "malicious_engines": malicious}
+    output = capsys.readouterr().out
+    if malicious == 0:
+        assert "VirusTotal: clean" in output
+    else:
+        assert "3 engines flagged as malicious" in output
+
+
+def test_main_exports_failed_vt_lookup_as_unavailable(tmp_path, monkeypatch):
+    """A failed VT lookup must be exported as N/A rather than zero."""
+    log_file = tmp_path / "auth.log"
+    output_file = tmp_path / "results.csv"
+    log_file.write_text(
+        "sshd[1]: Failed password for root from 8.8.8.8 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "logsentry",
+            "-l", str(log_file),
+            "-t", "1",
+            "-o", str(output_file),
+        ],
+    )
+
+    with patch(
+        "logsentry.main.check_ip_virustotal",
+        return_value={},
+    ) as check_vt:
+        main()
+
+    check_vt.assert_called_once_with("8.8.8.8")
+    assert output_file.read_text().splitlines() == [
+        "ip,malicious_engines",
+        "8.8.8.8,N/A",
+    ]
