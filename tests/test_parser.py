@@ -27,22 +27,23 @@ def test_extract_ips_above_threshold(tmp_path):
 def test_extract_ips_below_threshold_excluded(tmp_path):
     """IPs occurring fewer times than the threshold should be excluded."""
     log_file = tmp_path / "test.log"
-    log_file.write_text(
-        "Failed password for root from 999.999.999.999\n"
-        "Failed password for root from 999.999.999.999\n"
-    )
+    log_file.write_text("Failed password for root from 5.6.7.8\n")
+
     result = extract_ips_from_log(str(log_file), threshold=2)
+
     assert result == []
 
 
 def test_extract_ips_invalid_octets_ignored(tmp_path):
-    """Malformed IPs with octets above 255 should not be matched by the regex."""
+    """Malformed IPs with octets above 255 should be ignored."""
     log_file = tmp_path / "test.log"
     log_file.write_text(
-        "Bad IP 999.999.999.999\n"
-        "Bad IP 999.999.999.999\n"
+        "Failed password for root from 999.999.999.999\n"
+        "Failed password for root from 999.999.999.999\n"
     )
+
     result = extract_ips_from_log(str(log_file), threshold=1)
+
     assert result == []
 
 
@@ -514,76 +515,79 @@ def test_extract_ips_window_missing_file_returns_empty_list(tmp_path):
         str(log_file), threshold=3, window_seconds=60,
     ) == []
 
-    @pytest.mark.parametrize("window_seconds", [None, 60])
-    @pytest.mark.parametrize(
-        "message, expected",
-        [
-            (
-                    "10.0.0.10 sshd[1]: "
-                    "Failed password for root from 8.8.8.8 port 22 ssh2",
-                    ["8.8.8.8"],
-            ),
-            (
-                    "srv sshd[1]: Invalid user 1.1.1.1 from 8.8.8.8 port 22",
-                    ["8.8.8.8"],
-            ),
-            (
-                    "srv sshd[1]: "
-                    "Failed password for invalid user 1.1.1.1 "
-                    "from 8.8.8.8 port 22 ssh2",
-                    ["8.8.8.8"],
-            ),
-            (
-                    "srv app[1]: Failed password while contacting 1.1.1.1",
-                    [],
-            ),
-        ],
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "10.0.0.10 sshd[1]: "
+            "Failed password for root from 8.8.8.8 port 22 ssh2",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv sshd[1]: Invalid user 1.1.1.1 from 8.8.8.8 port 22",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv sshd[1]: "
+            "Failed password for invalid user 1.1.1.1 "
+            "from 8.8.8.8 port 22 ssh2",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv app[1]: Failed password while contacting 1.1.1.1",
+            [],
+        ),
+    ],
+)
+def test_extract_ips_counts_only_authentication_source(
+    tmp_path, window_seconds, message, expected,
+):
+    """Ignore IPs outside the source field of supported authentication events."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        f"Jul 20 08:00:00 {message}\n",
+        encoding="utf-8",
     )
-    def test_extract_ips_counts_only_authentication_source(
-            tmp_path, window_seconds, message, expected,
-    ):
-        """Ignore IPs outside the source field of supported authentication events."""
-        log_file = tmp_path / "auth.log"
-        log_file.write_text(
-            f"Jul 20 08:00:00 {message}\n",
-            encoding="utf-8",
-        )
 
-        assert extract_ips_from_log(
-            str(log_file),
-            threshold=1,
-            window_seconds=window_seconds,
-        ) == expected
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == expected
 
-    @pytest.mark.parametrize("window_seconds", [None, 60])
-    def test_extract_ips_counts_each_event_once(tmp_path, window_seconds):
-        """Repeating the source IP elsewhere in one line must not increase its count."""
-        log_file = tmp_path / "auth.log"
-        log_file.write_text(
-            "Jul 20 08:00:00 8.8.8.8 sshd[1]: "
-            "Invalid user 8.8.8.8 from 8.8.8.8 port 22\n",
-            encoding="utf-8",
-        )
 
-        assert extract_ips_from_log(
-            str(log_file),
-            threshold=2,
-            window_seconds=window_seconds,
-        ) == []
+@pytest.mark.parametrize("window_seconds", [None, 60])
+def test_extract_ips_counts_each_event_once(tmp_path, window_seconds):
+    """Repeating the source IP elsewhere in one line must not increase its count."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 8.8.8.8 sshd[1]: "
+        "Invalid user 8.8.8.8 from 8.8.8.8 port 22\n",
+        encoding="utf-8",
+    )
 
-    @pytest.mark.parametrize("window_seconds", [None, 60])
-    def test_extract_ips_ignores_incomplete_authentication_messages(
-            tmp_path, window_seconds,
-    ):
-        """A marker and an IP alone should not constitute a supported SSH event."""
-        log_file = tmp_path / "auth.log"
-        log_file.write_text(
-            "Jul 20 08:00:00 srv sshd[1]: Failed password from 8.8.8.8\n",
-            encoding="utf-8",
-        )
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=2,
+        window_seconds=window_seconds,
+    ) == []
 
-        assert extract_ips_from_log(
-            str(log_file),
-            threshold=1,
-            window_seconds=window_seconds,
-        ) == []
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+def test_extract_ips_ignores_incomplete_authentication_messages(
+    tmp_path, window_seconds,
+):
+    """A marker and an IP alone should not constitute a supported SSH event."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[1]: Failed password from 8.8.8.8\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == []
