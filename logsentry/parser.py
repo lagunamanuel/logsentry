@@ -9,9 +9,7 @@ from dataclasses import dataclass
 # Markers that identify a failed SSH authentication attempt in auth logs
 FAILED_LOGIN_MARKERS = ("Failed password", "Invalid user")
 
-# Matches an IPv4 address, validating each octet is between 0-255:
-# (250-255 | 200-249 | 0-199) three times followed by a dot, then once more
-IPV4_PATTERN = r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
+
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -27,11 +25,11 @@ ISO_TIMESTAMP = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|
 #   "Failed password for invalid user admin from 1.2.3.4"
 #   "Accepted publickey for manuel from 1.2.3.4"
 #   "Invalid user admin from 1.2.3.4"
+# Capture the complete source token; parse_event validates it as IPv4.
 EVENT_PATTERN = re.compile(
     r'(?:(?P<kind>Failed|Accepted) \S+ for (?:invalid user )?|Invalid user )'
-    r'(?P<username>\S+) from (?P<ip>' + IPV4_PATTERN + r')'
+    r'(?P<username>\S+) from (?P<ip>\S+)'
 )
-
 
 @dataclass(frozen=True)
 class LogEvent:
@@ -130,9 +128,18 @@ def parse_event(line: str, year: Optional[int] = None) -> Optional[LogEvent]:
     if not match:
         return None
 
+    raw_ip = match.group("ip")
+    try:
+        address = ipaddress.IPv4Address(raw_ip)
+    except ValueError:
+        return None
+
+    if str(address) != raw_ip:
+        return None
+
     kind = "accepted" if match.group("kind") == "Accepted" else "failed"
     return LogEvent(
-        ip=match.group("ip"),
+        ip=raw_ip,
         kind=kind,
         username=match.group("username"),
         timestamp=parse_timestamp(line, year),

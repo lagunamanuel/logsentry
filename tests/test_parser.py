@@ -591,3 +591,54 @@ def test_extract_ips_ignores_incomplete_authentication_messages(
         threshold=1,
         window_seconds=window_seconds,
     ) == []
+@pytest.mark.parametrize(
+    "source, expected_ip",
+    [
+        ("8.8.8.8", "8.8.8.8"),
+        ("192.168.1.10", "192.168.1.10"),
+        ("0.0.0.0", "0.0.0.0"),
+        ("255.255.255.255", "255.255.255.255"),
+        ("1.2.3.4.5", None),
+        ("999.1.2.3.4", None),
+        ("8.8.8.8.example", None),
+        ("8.8.8.8:22", None),
+        ("001.2.3.4", None),
+        ("::ffff:8.8.8.8", None),
+        ("2001:db8::1", None),
+        ("999.999.999.999", None),
+    ],
+)
+def test_parse_event_validates_complete_source_address(source, expected_ip):
+    """Validate the complete source token rather than an IPv4 substring."""
+    line = f"sshd[1]: Failed password for root from {source} port 22 ssh2"
+
+    event = parse_event(line)
+
+    if expected_ip is None:
+        assert event is None
+    else:
+        assert event is not None
+        assert event.ip == expected_ip
+
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "source",
+    ["1.2.3.4.5", "001.2.3.4", "::ffff:8.8.8.8"],
+)
+def test_extract_ips_rejects_invalid_source_tokens(
+    tmp_path, window_seconds, source,
+):
+    """Neither detection mode should count malformed or unsupported addresses."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[1]: Failed password for root "
+        f"from {source} port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == []
