@@ -169,10 +169,11 @@ def parse_events(log_path: str, year: Optional[int] = None) -> list[LogEvent]:
 
     return events
 
+
 def has_burst(
-    timestamps: list[datetime],
-    threshold: int,
-    window_seconds: int,
+        timestamps: list[datetime],
+        threshold: int,
+        window_seconds: int,
 ) -> bool:
     """
     Checks whether enough timestamps fall within a time window.
@@ -214,17 +215,17 @@ def has_burst(
 
 
 def extract_ips_from_log(
-    log_path: str,
-    threshold: int = 5,
-    *,
-    window_seconds: Optional[int] = None,
+        log_path: str,
+        threshold: int = 5,
+        *,
+        window_seconds: Optional[int] = None,
 ) -> list:
     """
     Extracts IPs whose failed-login occurrences reach the threshold.
 
-    Without a window, preserves the existing marker-based counting.
-    With a window, counts only structured failed events with timestamps,
-    grouped by IP.
+    Without a window, counts source IPs from supported failed-password
+    and invalid-user events. With a window, counts structured failed
+    events with timestamps, grouped by source IP.
 
     Args:
         log_path (str): Path to the log file.
@@ -265,8 +266,9 @@ def extract_ips_from_log(
             ip_counts = Counter()
             for line in file:
                 if is_failed_login(line):
-                    ip_counts.update(re.findall(IPV4_PATTERN, line))
-
+                    event = parse_event(line)
+                    if event is not None and event.kind == "failed":
+                        ip_counts[event.ip] += 1
             return [
                 ip for ip, count in ip_counts.items()
                 if count >= threshold

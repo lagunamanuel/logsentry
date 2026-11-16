@@ -68,7 +68,8 @@ logsentry -l /path/to/your/test.log
 | `--log` | `-l` | **(Required)** Path to the log file to analyze. |
 | `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
 | `--window` | `-w` | Require the threshold per IP within this many seconds. Must be a positive integer. Disabled by default. |
-| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). || `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
+| `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
 | `--output` | `-o` | Export results to a CSV file with the given filename. |
 
 ### Examples
@@ -94,8 +95,7 @@ logsentry -l auth.log -t 5 -w 60 --no-vt
 
 ### Time-window detection
 
-Without `--window`, LogSentry preserves its existing whole-file occurrence counting.
-
+Without `--window`, LogSentry counts supported failed-password and invalid-user events per source IP across the whole file.
 With `--window SECONDS` (or `-w SECONDS`):
 * Failed SSH authentication events are grouped by source IP.
 * Any group reaching the threshold within the window is detected, even if log entries are out of chronological order.
@@ -130,7 +130,7 @@ python3 -m pytest tests/ -v
 ```
 ## ⚠️ Known Limitations
 
-* **SSH-style logs only:** the default mode recognises the markers `Failed password` and `Invalid user`. Window mode requires structured SSH authentication lines. Other services such as nginx or Apache are not supported.
+* **SSH-style logs only:** both modes require supported SSH authentication messages, such as `Failed password for ... from ...` or `Invalid user ... from ...`. Other services such as nginx or Apache are not supported.
 * **Possible double counting:** sshd can log two lines for a single attempt against a non-existent user (`Invalid user ...` and `Failed password for invalid user ...`), so that attempt counts twice towards the threshold in both modes.
 * **IPv4 only:** IPv6 is not supported.
 * **Syslog date assumptions:** classic syslog timestamps contain no year or timezone. The current year is assumed; year rollover across December and January is not inferred.
