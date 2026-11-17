@@ -119,7 +119,15 @@ def main() -> None:
     if args.output and results:
         # Deferred import: reporter is only needed when --output is set
         from logsentry.reporter import export_to_csv
-        export_to_csv(results, args.output)
+
+        try:
+            export_to_csv(results, args.output)
+        except OSError as exc:
+            parser.exit(
+                1,
+                f"[!] Error: Cannot write CSV file '{args.output}': {exc}\n",
+            )
+
         print(f"\n[*] Results exported to {args.output}")
 
 

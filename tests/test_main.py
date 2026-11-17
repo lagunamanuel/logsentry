@@ -495,3 +495,37 @@ def test_main_reports_log_read_errors(
     assert "[!] Error: Cannot read log file 'auth.log':" in captured.err
     assert str(error) in captured.err
     assert "Found " not in captured.out
+def test_main_reports_csv_write_failure(monkeypatch, capsys):
+    """A failed export must exit unsuccessfully without announcing success."""
+    monkeypatch.setattr(
+        "sys.argv",
+        ["logsentry", "-l", "auth.log", "--no-vt", "-o", "results.csv"],
+    )
+
+    with (
+        patch(
+            "logsentry.main.extract_ips_from_log",
+            return_value=["8.8.8.8"],
+        ),
+        patch(
+            "logsentry.reporter.export_to_csv",
+            side_effect=PermissionError("permission denied"),
+        ) as export,
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 1
+    export.assert_called_once_with(
+        [{"ip": "8.8.8.8", "malicious_engines": "N/A"}],
+        "results.csv",
+    )
+    check_vt.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert (
+        "[!] Error: Cannot write CSV file 'results.csv': permission denied"
+        in captured.err
+    )
+    assert "Results exported" not in captured.out
