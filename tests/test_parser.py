@@ -642,3 +642,11 @@ def test_extract_ips_rejects_invalid_source_tokens(
         threshold=1,
         window_seconds=window_seconds,
     ) == []
+
+@pytest.mark.parametrize(
+    "ip",
+    ["224.0.0.0", "224.0.0.1", "239.255.255.250", "239.255.255.255"],
+)
+def test_is_public_ip_excludes_multicast(ip):
+    """Multicast addresses must not be eligible for public-IP lookups."""
+    assert not is_public_ip(ip)

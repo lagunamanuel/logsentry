@@ -9,7 +9,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
 * **Time-Window Detection:** Optionally require the threshold to be reached per IP within a configurable number of seconds using `--window`.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
-* **Private IP Handling:** Private, loopback and reserved addresses are still listed in the output and the CSV, but are never sent to VirusTotal, saving API quota and avoiding misleading "clean" results.
+* **Non-Public IP Handling:** Non-global and multicast addresses remain listed in terminal and CSV output, but are never sent to VirusTotal.
 * **Rate Limit Aware:** Smartly handles VirusTotal's public API limits (4 requests/min) with built-in delays, preventing account bans.
 * **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
 * **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.

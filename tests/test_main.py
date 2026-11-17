@@ -295,3 +295,50 @@ def test_main_continues_after_vt_timeout(tmp_path, monkeypatch):
         "8.8.8.8,N/A",
         "1.1.1.1,0",
     ]
+
+def test_main_skips_multicast_but_keeps_csv_rows(tmp_path, monkeypatch):
+    """Keep multicast results locally while querying VT only for public unicast."""
+    log_file = tmp_path / "auth.log"
+    output_file = tmp_path / "results.csv"
+    log_file.write_text(
+        "sshd[1]: Failed password for root from 224.0.0.1 port 22 ssh2\n"
+        "sshd[2]: Failed password for root from 239.255.255.250 port 22 ssh2\n"
+        "sshd[3]: Failed password for root from 8.8.8.8 port 22 ssh2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "logsentry",
+            "-l", str(log_file),
+            "-t", "1",
+            "-o", str(output_file),
+        ],
+    )
+
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": 0},
+            },
+        },
+    }
+
+    with (
+        patch(
+            "logsentry.main.check_ip_virustotal",
+            return_value=vt_data,
+        ) as check_vt,
+        patch("logsentry.main.time.sleep") as sleep,
+    ):
+        main()
+
+    check_vt.assert_called_once_with("8.8.8.8")
+    sleep.assert_not_called()
+    assert output_file.read_text().splitlines() == [
+        "ip,malicious_engines",
+        "224.0.0.1,N/A",
+        "239.255.255.250,N/A",
+        "8.8.8.8,0",
+    ]

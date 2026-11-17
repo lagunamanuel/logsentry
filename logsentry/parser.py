@@ -55,23 +55,22 @@ def is_failed_login(line: str) -> bool:
 
 def is_public_ip(ip: str) -> bool:
     """
-    Returns True if the IP is globally routable on the internet.
+    Returns True for globally routable unicast addresses.
 
-
-    Private ranges (192.168.x.x, 10.x.x.x...), loopback and reserved
-    blocks return False. Strings that are not valid IPs also return False.
+    Non-global addresses and multicast addresses are excluded from
+    VirusTotal lookups. Invalid strings also return False.
 
     Args:
-        ip (str): The IPv4 address to classify.
+        ip (str): The IP address to classify.
 
     Returns:
-        bool: True if the address is public, False otherwise.
+        bool: Whether the address is eligible for a public-IP lookup.
     """
     try:
-        return ipaddress.ip_address(ip).is_global
+        address = ipaddress.ip_address(ip)
+        return address.is_global and not address.is_multicast
     except ValueError:
         return False
-
 
 def parse_timestamp(line: str, year: Optional[int] = None) -> Optional[datetime]:
     """
