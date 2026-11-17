@@ -160,6 +160,7 @@ def test_main_local_scan_and_csv(
             in capsys.readouterr().out
     )
 
+
 @pytest.mark.parametrize(
     "vt_data",
     [
@@ -236,8 +237,8 @@ def test_main_exports_failed_vt_lookup_as_unavailable(tmp_path, monkeypatch):
     )
 
     with patch(
-        "logsentry.main.check_ip_virustotal",
-        return_value={},
+            "logsentry.main.check_ip_virustotal",
+            return_value={},
     ) as check_vt:
         main()
 
@@ -296,6 +297,7 @@ def test_main_continues_after_vt_timeout(tmp_path, monkeypatch):
         "1.1.1.1,0",
     ]
 
+
 def test_main_skips_multicast_but_keeps_csv_rows(tmp_path, monkeypatch):
     """Keep multicast results locally while querying VT only for public unicast."""
     log_file = tmp_path / "auth.log"
@@ -343,13 +345,14 @@ def test_main_skips_multicast_but_keeps_csv_rows(tmp_path, monkeypatch):
         "8.8.8.8,0",
     ]
 
+
 @pytest.mark.parametrize("window_seconds", [None, 60])
 @pytest.mark.parametrize(
     "output_kind",
     ["same_path", "relative_path", "symlink", "hardlink"],
 )
 def test_main_rejects_output_pointing_to_input(
-    tmp_path, monkeypatch, capsys, window_seconds, output_kind,
+        tmp_path, monkeypatch, capsys, window_seconds, output_kind,
 ):
     """Reject equivalent output paths without changing the input log."""
     log_file = tmp_path / "auth.log"
@@ -396,18 +399,19 @@ def test_main_rejects_output_pointing_to_input(
 
     assert exc.value.code == 2
     assert (
-        "[!] Error: --output must not refer to the input log file"
-        in capsys.readouterr().err
+            "[!] Error: --output must not refer to the input log file"
+            in capsys.readouterr().err
     )
     extract.assert_not_called()
     check_vt.assert_not_called()
     export.assert_not_called()
     assert log_file.read_text(encoding="utf-8") == content
 
+
 @pytest.mark.parametrize("flag", ["-t", "--threshold"])
 @pytest.mark.parametrize("threshold", ["0", "-1"])
 def test_main_rejects_invalid_threshold_without_window(
-    monkeypatch, capsys, flag, threshold,
+        monkeypatch, capsys, flag, threshold,
 ):
     """Reject non-positive thresholds before reading or querying VT."""
     monkeypatch.setattr(
@@ -426,6 +430,33 @@ def test_main_rejects_invalid_threshold_without_window(
     extract.assert_not_called()
     check_vt.assert_not_called()
     assert (
-        "[!] Error: --threshold must be positive"
-        in capsys.readouterr().err
+            "[!] Error: --threshold must be positive"
+            in capsys.readouterr().err
     )
+
+
+def test_main_rejects_missing_vt_api_key(monkeypatch, capsys):
+    """Missing credentials must fail before reading or querying VT."""
+    monkeypatch.delenv("VT_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["logsentry", "-l", "auth.log"],
+    )
+
+    with (
+        patch("logsentry.main.extract_ips_from_log") as extract,
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 2
+    extract.assert_not_called()
+    check_vt.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert (
+            "[!] Error: VT_API_KEY environment variable is not set."
+            in captured.err
+    )
+    assert "--no-vt" in captured.err

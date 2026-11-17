@@ -27,8 +27,10 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
-    parser.add_argument("-t", "--threshold", type=int, default=5, help="Minimum number of failed attempts to consider an IP suspicious")
-    parser.add_argument("-w", "--window",type=int,default=None,metavar="SECONDS",help="Require the failed-login threshold per IP within this many seconds")
+    parser.add_argument("-t", "--threshold", type=int, default=5,
+                        help="Minimum number of failed attempts to consider an IP suspicious")
+    parser.add_argument("-w", "--window", type=int, default=None, metavar="SECONDS",
+                        help="Require the failed-login threshold per IP within this many seconds")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
     parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
@@ -70,10 +72,11 @@ def main() -> None:
     print(f"[*] Analyzing log file: {args.log}")
 
     if not args.no_vt and not os.environ.get("VT_API_KEY"):
-        print("[!] Error: VT_API_KEY environment variable is not set.")
-        print("[-] Please set it first: export VT_API_KEY='your_api_key'")
-        print("[-] Or run the tool with --no-vt for local mode.")
-        return
+        parser.exit(
+            2,
+            "[!] Error: VT_API_KEY environment variable is not set.\n"
+            "[*] Set VT_API_KEY or use --no-vt for local mode.\n",
+        )
 
     try:
         ips = extract_ips_from_log(
@@ -135,9 +138,9 @@ def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
         malicious = None
 
     if (
-        not isinstance(malicious, int)
-        or isinstance(malicious, bool)
-        or malicious < 0
+            not isinstance(malicious, int)
+            or isinstance(malicious, bool)
+            or malicious < 0
     ):
         print(f"[!] Error: Could not retrieve valid VirusTotal data for {ip}")
         return {"ip": ip, "malicious_engines": "N/A"}
