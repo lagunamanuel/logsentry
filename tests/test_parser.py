@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 import pytest
 from logsentry.parser import (
     LogEvent,
@@ -16,9 +17,9 @@ def test_extract_ips_above_threshold(tmp_path):
     """IPs occurring at or above the threshold should be flagged as suspicious."""
     log_file = tmp_path / "test.log"
     log_file.write_text(
-        "Failed password from 1.2.3.4\n"
-        "Failed password from 1.2.3.4\n"
-        "Failed password from 1.2.3.4\n"
+        "Failed password for root from 1.2.3.4\n"
+        "Failed password for root from 1.2.3.4\n"
+        "Failed password for root from 1.2.3.4\n"
     )
     result = extract_ips_from_log(str(log_file), threshold=2)
     assert result == ["1.2.3.4"]
@@ -27,26 +28,31 @@ def test_extract_ips_above_threshold(tmp_path):
 def test_extract_ips_below_threshold_excluded(tmp_path):
     """IPs occurring fewer times than the threshold should be excluded."""
     log_file = tmp_path / "test.log"
-    log_file.write_text("Failed password from 5.6.7.8\n")
+    log_file.write_text("Failed password for root from 5.6.7.8\n")
+
     result = extract_ips_from_log(str(log_file), threshold=2)
+
     assert result == []
 
 
 def test_extract_ips_invalid_octets_ignored(tmp_path):
-    """Malformed IPs with octets above 255 should not be matched by the regex."""
+    """Malformed IPs with octets above 255 should be ignored."""
     log_file = tmp_path / "test.log"
     log_file.write_text(
-        "Bad IP 999.999.999.999\n"
-        "Bad IP 999.999.999.999\n"
+        "Failed password for root from 999.999.999.999\n"
+        "Failed password for root from 999.999.999.999\n"
     )
+
     result = extract_ips_from_log(str(log_file), threshold=1)
+
     assert result == []
 
 
 def test_extract_ips_file_not_found():
-    """A missing log file should return an empty list instead of raising."""
-    result = extract_ips_from_log("nonexistent.log", threshold=1)
-    assert result == []
+    """A missing log must raise rather than look like an empty scan."""
+    with patch("builtins.open", side_effect=FileNotFoundError("missing log")):
+        with pytest.raises(FileNotFoundError):
+            extract_ips_from_log("nonexistent.log", threshold=1)
 
 
 def test_is_failed_login_failed_password():
@@ -503,10 +509,155 @@ def test_extract_ips_window_rejects_mixed_timezone_awareness(tmp_path):
         )
 
 
-def test_extract_ips_window_missing_file_returns_empty_list(tmp_path):
-    """Window mode should preserve the existing missing-file behavior."""
+def test_extract_ips_window_missing_file_raises(tmp_path):
+    """Window mode must also propagate missing-file errors."""
     log_file = tmp_path / "missing.log"
 
+    with pytest.raises(FileNotFoundError):
+        extract_ips_from_log(
+            str(log_file), threshold=3, window_seconds=60,
+        )
+
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "10.0.0.10 sshd[1]: "
+            "Failed password for root from 8.8.8.8 port 22 ssh2",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv sshd[1]: Invalid user 1.1.1.1 from 8.8.8.8 port 22",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv sshd[1]: "
+            "Failed password for invalid user 1.1.1.1 "
+            "from 8.8.8.8 port 22 ssh2",
+            ["8.8.8.8"],
+        ),
+        (
+            "srv app[1]: Failed password while contacting 1.1.1.1",
+            [],
+        ),
+    ],
+)
+def test_extract_ips_counts_only_authentication_source(
+    tmp_path, window_seconds, message, expected,
+):
+    """Ignore IPs outside the source field of supported authentication events."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        f"Jul 20 08:00:00 {message}\n",
+        encoding="utf-8",
+    )
+
     assert extract_ips_from_log(
-        str(log_file), threshold=3, window_seconds=60,
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == expected
+
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+def test_extract_ips_counts_each_event_once(tmp_path, window_seconds):
+    """Repeating the source IP elsewhere in one line must not increase its count."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 8.8.8.8 sshd[1]: "
+        "Invalid user 8.8.8.8 from 8.8.8.8 port 22\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=2,
+        window_seconds=window_seconds,
     ) == []
+
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+def test_extract_ips_ignores_incomplete_authentication_messages(
+    tmp_path, window_seconds,
+):
+    """A marker and an IP alone should not constitute a supported SSH event."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[1]: Failed password from 8.8.8.8\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == []
+@pytest.mark.parametrize(
+    "source, expected_ip",
+    [
+        ("8.8.8.8", "8.8.8.8"),
+        ("192.168.1.10", "192.168.1.10"),
+        ("0.0.0.0", "0.0.0.0"),
+        ("255.255.255.255", "255.255.255.255"),
+        ("1.2.3.4.5", None),
+        ("999.1.2.3.4", None),
+        ("8.8.8.8.example", None),
+        ("8.8.8.8:22", None),
+        ("001.2.3.4", None),
+        ("::ffff:8.8.8.8", None),
+        ("2001:db8::1", None),
+        ("999.999.999.999", None),
+    ],
+)
+def test_parse_event_validates_complete_source_address(source, expected_ip):
+    """Validate the complete source token rather than an IPv4 substring."""
+    line = f"sshd[1]: Failed password for root from {source} port 22 ssh2"
+
+    event = parse_event(line)
+
+    if expected_ip is None:
+        assert event is None
+    else:
+        assert event is not None
+        assert event.ip == expected_ip
+
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "source",
+    ["1.2.3.4.5", "001.2.3.4", "::ffff:8.8.8.8"],
+)
+def test_extract_ips_rejects_invalid_source_tokens(
+    tmp_path, window_seconds, source,
+):
+    """Neither detection mode should count malformed or unsupported addresses."""
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[1]: Failed password for root "
+        f"from {source} port 22 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file),
+        threshold=1,
+        window_seconds=window_seconds,
+    ) == []
+
+@pytest.mark.parametrize(
+    "ip",
+    ["224.0.0.0", "224.0.0.1", "239.255.255.250", "239.255.255.255"],
+)
+def test_is_public_ip_excludes_multicast(ip):
+    """Multicast addresses must not be eligible for public-IP lookups."""
+    assert not is_public_ip(ip)
+@pytest.mark.parametrize("threshold", [0, -1])
+def test_extract_ips_rejects_invalid_threshold_without_window(threshold):
+    """Validate the threshold before attempting to open the log."""
+    with patch("builtins.open") as open_log:
+        with pytest.raises(ValueError, match="threshold must be positive"):
+            extract_ips_from_log("auth.log", threshold=threshold)
+
+    open_log.assert_not_called()

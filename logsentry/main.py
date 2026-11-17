@@ -27,39 +27,67 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="LogSentry: CLI tool to analyze log IPs.")
     parser.add_argument("-l", "--log", required=True, help="Path to the log file to analyze")
-    parser.add_argument("-t", "--threshold", type=int, default=5, help="Minimum number of failed attempts to consider an IP suspicious")
-    parser.add_argument("-w", "--window",type=int,default=None,metavar="SECONDS",help="Require the failed-login threshold per IP within this many seconds")
+    parser.add_argument("-t", "--threshold", type=int, default=5,
+                        help="Minimum number of failed attempts to consider an IP suspicious")
+    parser.add_argument("-w", "--window", type=int, default=None, metavar="SECONDS",
+                        help="Require the failed-login threshold per IP within this many seconds")
     parser.add_argument("--no-vt", action="store_true", help="Skip VirusTotal lookups")
     parser.add_argument("--premium", action="store_true", help="ONLY PREMIUM API: skips waiting time between api calls")
     parser.add_argument("-o", "--output", help="Export results to a CSV file with the given filename")
 
     args = parser.parse_args()
 
-    if args.window is not None:
-        if args.window <= 0:
-            parser.exit(
-                2,
-                "[!] Error: --window must be a positive number of seconds\n",
+    if args.window is not None and args.window <= 0:
+        parser.exit(
+            2,
+            "[!] Error: --window must be a positive number of seconds\n",
+        )
+
+    if args.threshold <= 0:
+        parser.exit(
+            2,
+            "[!] Error: --threshold must be positive\n",
+        )
+    if args.output:
+        try:
+            same_file = (
+                    os.path.realpath(args.log)
+                    == os.path.realpath(args.output)
             )
-        if args.threshold <= 0:
+            if (
+                    not same_file
+                    and os.path.exists(args.log)
+                    and os.path.exists(args.output)
+            ):
+                same_file = os.path.samefile(args.log, args.output)
+        except OSError as exc:
+            parser.exit(2, f"[!] Error: Cannot compare input/output paths: {exc}\n")
+
+        if same_file:
             parser.exit(
                 2,
-                "[!] Error: --threshold must be positive when --window is used\n",
+                "[!] Error: --output must not refer to the input log file\n",
             )
 
     print(f"[*] Analyzing log file: {args.log}")
 
     if not args.no_vt and not os.environ.get("VT_API_KEY"):
-        print("[!] Error: VT_API_KEY environment variable is not set.")
-        print("[-] Please set it first: export VT_API_KEY='your_api_key'")
-        print("[-] Or run the tool with --no-vt for local mode.")
-        return
+        parser.exit(
+            2,
+            "[!] Error: VT_API_KEY environment variable is not set.\n"
+            "[*] Set VT_API_KEY or use --no-vt for local mode.\n",
+        )
 
     try:
         ips = extract_ips_from_log(
             args.log,
             args.threshold,
             window_seconds=args.window,
+        )
+    except (OSError, UnicodeDecodeError) as exc:
+        parser.exit(
+            1,
+            f"[!] Error: Cannot read log file '{args.log}': {exc}\n",
         )
     except ValueError as exc:
         parser.exit(2, f"[!] Error: {exc}\n")
@@ -91,34 +119,52 @@ def main() -> None:
     if args.output and results:
         # Deferred import: reporter is only needed when --output is set
         from logsentry.reporter import export_to_csv
-        export_to_csv(results, args.output)
+
+        try:
+            export_to_csv(results, args.output)
+        except OSError as exc:
+            parser.exit(
+                1,
+                f"[!] Error: Cannot write CSV file '{args.output}': {exc}\n",
+            )
+
         print(f"\n[*] Results exported to {args.output}")
 
 
 def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
     """
-    Evaluates the VirusTotal API response, prints the results,
-    and returns a summary dict for reporting purposes.
+    Evaluates a VirusTotal response and returns a reporting summary.
+
+    Returns 'N/A' when a valid malicious-engine count is unavailable,
+    so failed lookups cannot be confused with zero detections.
 
     Args:
         ip (str): The IP address that was checked.
         vt_data (dict): The JSON response payload from VirusTotal.
 
     Returns:
-        dict: A dictionary with 'ip' and 'malicious_engines' keys.
+        dict: A summary with 'ip' and 'malicious_engines' keys.
     """
-    malicious = 0
+    try:
+        malicious = vt_data["data"]["attributes"]["last_analysis_stats"]["malicious"]
+    except (KeyError, TypeError):
+        malicious = None
 
-    if vt_data and "data" in vt_data:
-        stats = vt_data["data"]["attributes"]["last_analysis_stats"]
-        malicious = stats.get("malicious", 0)
+    if (
+            not isinstance(malicious, int)
+            or isinstance(malicious, bool)
+            or malicious < 0
+    ):
+        print(f"[!] Error: Could not retrieve valid VirusTotal data for {ip}")
+        return {"ip": ip, "malicious_engines": "N/A"}
 
-        if malicious > 0:
-            print(f"[!] Suspicious IP detected: {ip} -> VirusTotal: {malicious} engines flagged as malicious")
-        else:
-            print(f"[-] IP {ip} -> VirusTotal: clean")
+    if malicious > 0:
+        print(
+            f"[!] Suspicious IP detected: {ip} -> "
+            f"VirusTotal: {malicious} engines flagged as malicious"
+        )
     else:
-        print(f"[-] Could not retrieve data for {ip}")
+        print(f"[-] IP {ip} -> VirusTotal: clean")
 
     return {"ip": ip, "malicious_engines": malicious}
 

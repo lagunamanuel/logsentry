@@ -5,13 +5,11 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 ## ✨ Features
 
 * **IPv4 Extraction:** Extracts IPv4 addresses from supported SSH authentication logs.
-* **Failed-Login Detection:** Counts failed password and invalid-user log entries by default. Time-window mode uses structured failed SSH authentication events.
-* **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
+* **Failed-Login Detection:** Counts supported failed-password and invalid-user SSH log entries per source IPv4 address. Optionally restrict detection to a time window.* **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
 * **Time-Window Detection:** Optionally require the threshold to be reached per IP within a configurable number of seconds using `--window`.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
-* **Private IP Handling:** Private, loopback and reserved addresses are still listed in the output and the CSV, but are never sent to VirusTotal, saving API quota and avoiding misleading "clean" results.
-* **Rate Limit Aware:** Smartly handles VirusTotal's public API limits (4 requests/min) with built-in delays, preventing account bans.
-* **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
+* **Non-Public IP Handling:** Non-global and multicast addresses remain listed in terminal and CSV output, but are never sent to VirusTotal.
+* **Rate Limit Aware:** Adds a 15-second delay after public-IP lookups when more results remain, unless `--premium` is used. VirusTotal quotas still apply.* **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
 * **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.
 
 ## ⚙️ Prerequisites
@@ -65,12 +63,12 @@ logsentry -l /path/to/your/test.log
 
 | Argument | Short | Description |
 | :--- | :--- | :--- |
-| `--log` | `-l` | **(Required)** Path to the log file to analyze. |
-| `--threshold`| `-t` | Minimum number of occurrences to consider an IP suspicious (Default: 5). |
+| `--log` | `-l` | **(Required)** Path to the UTF-8 SSH authentication log to analyze. |
+| `--threshold` | `-t` | Minimum failed-login entries per source IP. Must be a positive integer (Default: 5). |
 | `--window` | `-w` | Require the threshold per IP within this many seconds. Must be a positive integer. Disabled by default. |
-| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). || `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
-| `--output` | `-o` | Export results to a CSV file with the given filename. |
-
+| `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
+| `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
+| `--output` | `-o` | Export detected IPs to CSV. Must not refer to the input log, including through symbolic or hard links. |
 ### Examples
 
 **1. Basic scan with a custom threshold of 10:**
@@ -94,8 +92,7 @@ logsentry -l auth.log -t 5 -w 60 --no-vt
 
 ### Time-window detection
 
-Without `--window`, LogSentry preserves its existing whole-file occurrence counting.
-
+Without `--window`, LogSentry counts supported failed-password and invalid-user events per source IP across the whole file.
 With `--window SECONDS` (or `-w SECONDS`):
 * Failed SSH authentication events are grouped by source IP.
 * Any group reaching the threshold within the window is detected, even if log entries are out of chronological order.
@@ -108,6 +105,22 @@ Supported timestamps:
 * Classic syslog: `Jul 20 08:12:01`
 * ISO 8601: `2026-07-20T08:12:01`, optionally with fractional seconds and a timezone offset or `Z`.
 
+### CSV results
+
+The CSV columns are `ip,malicious_engines`.
+
+* `0` means VirusTotal returned a valid malicious-engine count of zero; it does not prove that an IP is safe.
+* `N/A` means the lookup was skipped or a valid count was unavailable.
+* When no IP reaches the detection threshold, no CSV is created or updated.
+* Export errors cause a non-zero exit status. Writes are not atomic: a failed export may leave a partial CSV.
+
+### Input and exit codes
+
+Logs must be valid UTF-8. Missing, unreadable or incorrectly encoded logs are reported as errors, not empty scans.
+
+* `0`: Processing completed. Individual VirusTotal lookup failures are reported as `N/A` and do not change this status.
+* `1`: Log reading or CSV writing failed.
+* `2`: Invalid arguments or configuration, including a missing `VT_API_KEY` when `--no-vt` is not used.
 ## 📸 Screenshots
 
 ### Full scan with VirusTotal
@@ -130,7 +143,7 @@ python3 -m pytest tests/ -v
 ```
 ## ⚠️ Known Limitations
 
-* **SSH-style logs only:** the default mode recognises the markers `Failed password` and `Invalid user`. Window mode requires structured SSH authentication lines. Other services such as nginx or Apache are not supported.
+* **SSH-style logs only:** both modes require supported SSH authentication messages, such as `Failed password for ... from ...` or `Invalid user ... from ...`. Other services such as nginx or Apache are not supported.
 * **Possible double counting:** sshd can log two lines for a single attempt against a non-existent user (`Invalid user ...` and `Failed password for invalid user ...`), so that attempt counts twice towards the threshold in both modes.
 * **IPv4 only:** IPv6 is not supported.
 * **Syslog date assumptions:** classic syslog timestamps contain no year or timezone. The current year is assumed; year rollover across December and January is not inferred.
