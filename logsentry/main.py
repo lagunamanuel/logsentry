@@ -47,6 +47,27 @@ def main() -> None:
                 "[!] Error: --threshold must be positive when --window is used\n",
             )
 
+    if args.output:
+        try:
+            same_file = (
+                    os.path.realpath(args.log)
+                    == os.path.realpath(args.output)
+            )
+            if (
+                    not same_file
+                    and os.path.exists(args.log)
+                    and os.path.exists(args.output)
+            ):
+                same_file = os.path.samefile(args.log, args.output)
+        except OSError as exc:
+            parser.exit(2, f"[!] Error: Cannot compare input/output paths: {exc}\n")
+
+        if same_file:
+            parser.exit(
+                2,
+                "[!] Error: --output must not refer to the input log file\n",
+            )
+
     print(f"[*] Analyzing log file: {args.log}")
 
     if not args.no_vt and not os.environ.get("VT_API_KEY"):

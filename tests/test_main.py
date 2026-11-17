@@ -342,3 +342,64 @@ def test_main_skips_multicast_but_keeps_csv_rows(tmp_path, monkeypatch):
         "239.255.255.250,N/A",
         "8.8.8.8,0",
     ]
+
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "output_kind",
+    ["same_path", "relative_path", "symlink", "hardlink"],
+)
+def test_main_rejects_output_pointing_to_input(
+    tmp_path, monkeypatch, capsys, window_seconds, output_kind,
+):
+    """Reject equivalent output paths without changing the input log."""
+    log_file = tmp_path / "auth.log"
+    content = (
+        "Jul 20 08:00:00 srv sshd[1]: "
+        "Failed password for root from 8.8.8.8 port 22 ssh2\n"
+    )
+    log_file.write_text(content, encoding="utf-8")
+
+    if output_kind == "same_path":
+        output = str(log_file)
+    elif output_kind == "relative_path":
+        monkeypatch.chdir(tmp_path)
+        output = "./auth.log"
+    elif output_kind == "symlink":
+        output_file = tmp_path / "results.csv"
+        output_file.symlink_to(log_file)
+        output = str(output_file)
+    else:
+        import os
+
+        output_file = tmp_path / "results.csv"
+        os.link(log_file, output_file)
+        output = str(output_file)
+
+    argv = [
+        "logsentry",
+        "-l", str(log_file),
+        "-t", "1",
+        "--no-vt",
+        "-o", output,
+    ]
+    if window_seconds is not None:
+        argv.extend(["--window", str(window_seconds)])
+    monkeypatch.setattr("sys.argv", argv)
+
+    with (
+        patch("logsentry.main.extract_ips_from_log") as extract,
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+        patch("logsentry.reporter.export_to_csv") as export,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 2
+    assert (
+        "[!] Error: --output must not refer to the input log file"
+        in capsys.readouterr().err
+    )
+    extract.assert_not_called()
+    check_vt.assert_not_called()
+    export.assert_not_called()
+    assert log_file.read_text(encoding="utf-8") == content
