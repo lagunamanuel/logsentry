@@ -460,3 +460,38 @@ def test_main_rejects_missing_vt_api_key(monkeypatch, capsys):
             in captured.err
     )
     assert "--no-vt" in captured.err
+@pytest.mark.parametrize("window_seconds", [None, 60])
+@pytest.mark.parametrize(
+    "error",
+    [
+        FileNotFoundError("missing log"),
+        PermissionError("permission denied"),
+        IsADirectoryError("path is a directory"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte"),
+    ],
+    ids=["missing", "permission", "directory", "encoding"],
+)
+def test_main_reports_log_read_errors(
+    monkeypatch, capsys, window_seconds, error,
+):
+    """Both real parsing paths must report read errors without continuing."""
+    argv = ["logsentry", "-l", "auth.log", "--no-vt"]
+    if window_seconds is not None:
+        argv.extend(["--window", str(window_seconds)])
+    monkeypatch.setattr("sys.argv", argv)
+
+    with (
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+        patch("builtins.open", side_effect=error) as open_log,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 1
+    open_log.assert_called_once_with("auth.log", "r", encoding="utf-8")
+    check_vt.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert "[!] Error: Cannot read log file 'auth.log':" in captured.err
+    assert str(error) in captured.err
+    assert "Found " not in captured.out

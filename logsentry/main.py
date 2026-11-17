@@ -84,6 +84,11 @@ def main() -> None:
             args.threshold,
             window_seconds=args.window,
         )
+    except (OSError, UnicodeDecodeError) as exc:
+        parser.exit(
+            1,
+            f"[!] Error: Cannot read log file '{args.log}': {exc}\n",
+        )
     except ValueError as exc:
         parser.exit(2, f"[!] Error: {exc}\n")
 

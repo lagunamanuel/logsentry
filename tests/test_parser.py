@@ -49,9 +49,10 @@ def test_extract_ips_invalid_octets_ignored(tmp_path):
 
 
 def test_extract_ips_file_not_found():
-    """A missing log file should return an empty list instead of raising."""
-    result = extract_ips_from_log("nonexistent.log", threshold=1)
-    assert result == []
+    """A missing log must raise rather than look like an empty scan."""
+    with patch("builtins.open", side_effect=FileNotFoundError("missing log")):
+        with pytest.raises(FileNotFoundError):
+            extract_ips_from_log("nonexistent.log", threshold=1)
 
 
 def test_is_failed_login_failed_password():
@@ -508,13 +509,14 @@ def test_extract_ips_window_rejects_mixed_timezone_awareness(tmp_path):
         )
 
 
-def test_extract_ips_window_missing_file_returns_empty_list(tmp_path):
-    """Window mode should preserve the existing missing-file behavior."""
+def test_extract_ips_window_missing_file_raises(tmp_path):
+    """Window mode must also propagate missing-file errors."""
     log_file = tmp_path / "missing.log"
 
-    assert extract_ips_from_log(
-        str(log_file), threshold=3, window_seconds=60,
-    ) == []
+    with pytest.raises(FileNotFoundError):
+        extract_ips_from_log(
+            str(log_file), threshold=3, window_seconds=60,
+        )
 
 
 @pytest.mark.parametrize("window_seconds", [None, 60])
