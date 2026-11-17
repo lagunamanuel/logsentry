@@ -244,16 +244,15 @@ def extract_ips_from_log(
             log file does not exist.
 
     Raises:
-        ValueError: In window mode, if threshold or window_seconds is
-            not positive, or timestamps for an IP mix timezone-aware
-            and naive datetimes.
+        ValueError: If threshold is not positive, window_seconds is
+            provided but not positive, or timestamps for an IP mix
+            timezone-aware and naive datetimes.
     """
-    if window_seconds is not None:
-        if threshold <= 0:
-            raise ValueError("threshold must be positive")
-        if window_seconds <= 0:
-            raise ValueError("window_seconds must be positive")
+    if threshold <= 0:
+        raise ValueError("threshold must be positive")
 
+    if window_seconds is not None and window_seconds <= 0:
+        raise ValueError("window_seconds must be positive")
     try:
         if window_seconds is not None:
             timestamps_by_ip = defaultdict(list)

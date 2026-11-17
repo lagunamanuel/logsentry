@@ -61,11 +61,11 @@ def test_main_passes_detection_parameters(
         ),
         (
                 ["--window", "60", "--threshold", "0"],
-                "[!] Error: --threshold must be positive when --window is used",
+                "[!] Error: --threshold must be positive",
         ),
         (
                 ["--window", "60", "--threshold", "-1"],
-                "[!] Error: --threshold must be positive when --window is used",
+                "[!] Error: --threshold must be positive",
         ),
         (
                 ["-w", "0"],
@@ -403,3 +403,29 @@ def test_main_rejects_output_pointing_to_input(
     check_vt.assert_not_called()
     export.assert_not_called()
     assert log_file.read_text(encoding="utf-8") == content
+
+@pytest.mark.parametrize("flag", ["-t", "--threshold"])
+@pytest.mark.parametrize("threshold", ["0", "-1"])
+def test_main_rejects_invalid_threshold_without_window(
+    monkeypatch, capsys, flag, threshold,
+):
+    """Reject non-positive thresholds before reading or querying VT."""
+    monkeypatch.setattr(
+        "sys.argv",
+        ["logsentry", "-l", "auth.log", "--no-vt", flag, threshold],
+    )
+
+    with (
+        patch("logsentry.main.extract_ips_from_log") as extract,
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 2
+    extract.assert_not_called()
+    check_vt.assert_not_called()
+    assert (
+        "[!] Error: --threshold must be positive"
+        in capsys.readouterr().err
+    )

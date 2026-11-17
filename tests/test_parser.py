@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 import pytest
 from logsentry.parser import (
     LogEvent,
@@ -650,3 +651,11 @@ def test_extract_ips_rejects_invalid_source_tokens(
 def test_is_public_ip_excludes_multicast(ip):
     """Multicast addresses must not be eligible for public-IP lookups."""
     assert not is_public_ip(ip)
+@pytest.mark.parametrize("threshold", [0, -1])
+def test_extract_ips_rejects_invalid_threshold_without_window(threshold):
+    """Validate the threshold before attempting to open the log."""
+    with patch("builtins.open") as open_log:
+        with pytest.raises(ValueError, match="threshold must be positive"):
+            extract_ips_from_log("auth.log", threshold=threshold)
+
+    open_log.assert_not_called()

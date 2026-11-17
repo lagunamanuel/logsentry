@@ -35,18 +35,17 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.window is not None:
-        if args.window <= 0:
-            parser.exit(
-                2,
-                "[!] Error: --window must be a positive number of seconds\n",
-            )
-        if args.threshold <= 0:
-            parser.exit(
-                2,
-                "[!] Error: --threshold must be positive when --window is used\n",
-            )
+    if args.window is not None and args.window <= 0:
+        parser.exit(
+            2,
+            "[!] Error: --window must be a positive number of seconds\n",
+        )
 
+    if args.threshold <= 0:
+        parser.exit(
+            2,
+            "[!] Error: --threshold must be positive\n",
+        )
     if args.output:
         try:
             same_file = (
