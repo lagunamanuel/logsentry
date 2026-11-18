@@ -20,6 +20,34 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * A [VirusTotal API Key](https://www.virustotal.com/) for online lookups. Not required with `--no-vt`.
 
 ## 🚀 Installation
+### Install the released version (recommended)
+
+Requires [pipx](https://pipx.pypa.io/).
+
+1. Download `logsentry-1.1.0-py3-none-any.whl` from the [v1.1.0 release](https://github.com/lagunamanuel/logsentry/releases/tag/v1.1.0).
+2. Open a terminal in the download directory and install it:
+
+   ```bash
+   pipx install ./logsentry-1.1.0-py3-none-any.whl
+   ```
+
+3. Verify the command:
+
+   ```bash
+   logsentry --help
+   ```
+
+For VirusTotal lookups, set your API key:
+
+```bash
+export VT_API_KEY="your_api_key_here"
+```
+
+Alternatively, use `--no-vt` for local analysis without an API key.
+
+### Install from source
+
+The following installs the repository checkout, which may include changes newer than the latest release.
 
 1. **Clone the repository:**
    ```bash
@@ -46,8 +74,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
    ```
    *(Tip: You can add this line to your `~/.bashrc` or `~/.zshrc` to make it persistent).*
 
-### Install globally (optional)
-
+### Install the source checkout with pipx (optional)
 To use `logsentry` from any terminal without activating a virtual environment, install it with [pipx](https://pipx.pypa.io/):
 
 ```bash
