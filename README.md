@@ -6,7 +6,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 
 * **IPv4 Extraction:** Extracts IPv4 addresses from supported SSH authentication logs.
 * **Failed-Login Detection:** Counts failed SSH login attempts per source IPv4 address, counting matching invalid-user and password-failure entries as one attempt.
-* * **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
+* **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
 * **Time-Window Detection:** Optionally require the threshold to be reached per IP within a configurable number of seconds using `--window`.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
 * **Non-Public IP Handling:** Non-global and multicast addresses remain listed in terminal and CSV output, but are never sent to VirusTotal.
