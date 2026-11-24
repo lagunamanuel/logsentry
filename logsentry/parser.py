@@ -219,6 +219,70 @@ def has_burst(
 
     return False
 
+# Match the SSH process after a supported timestamp.
+_SSH_PROCESS = re.compile(r"\s+(\S+) sshd\[(\d+)\]:\s+")
+_SOURCE_PORT = re.compile(r"\s+port ([0-9]+)(?=\s|$)")
+_CONNECTION_END = (
+    "Connection closed",
+    "Connection reset",
+    "Disconnected from",
+    "Received disconnect",
+)
+_INVALID_USER_MATCH_SECONDS = 5
+
+
+def _iter_failed_entries(lines, *, window_mode):
+    """Yield (line number, failed event, replaced line number or None)."""
+    pending = {}
+    year = datetime.now().year
+
+    for line_number, line in enumerate(lines):
+        stamp = ISO_TIMESTAMP.match(line) or SYSLOG_TIMESTAMP.match(line)
+        process = _SSH_PROCESS.match(line, stamp.end()) if stamp else None
+        key = process.groups() if process else None
+        message = line[process.end():] if process else ""
+
+        if key is not None and message.startswith(_CONNECTION_END):
+            pending.pop(key, None)
+            continue
+
+        event = parse_event(line, year)
+        if event is None:
+            continue
+
+        replaced = None
+        match = EVENT_PATTERN.match(message) if process else None
+
+        if key is not None and match is not None:
+            # Any subsequent authentication entry consumes the prior candidate.
+            previous = pending.pop(key, None)
+            port_match = _SOURCE_PORT.match(message, match.end())
+            port = int(port_match.group(1)) if port_match else None
+
+            if message.startswith("Invalid user ") and event.timestamp is not None:
+                pending[key] = (line_number, event, port)
+            elif (
+                previous is not None
+                and message.startswith("Failed password for invalid user ")
+                and event.timestamp is not None
+            ):
+                prior_line, prior_event, prior_port = previous
+                prior_time = prior_event.timestamp
+                current_time = event.timestamp
+
+                if (
+                    prior_event.ip == event.ip
+                    and prior_event.username == event.username
+                    and (prior_port is None or port is None or prior_port == port)
+                    and (prior_time.utcoffset() is None)
+                    == (current_time.utcoffset() is None)
+                    and timedelta(0) <= current_time - prior_time
+                    <= timedelta(seconds=_INVALID_USER_MATCH_SECONDS)
+                ):
+                    replaced = prior_line
+
+        if event.kind == "failed" and (window_mode or is_failed_login(line)):
+            yield line_number, event, replaced
 
 def extract_ips_from_log(
         log_path: str,
@@ -254,26 +318,33 @@ def extract_ips_from_log(
     if window_seconds is not None and window_seconds <= 0:
         raise ValueError("window_seconds must be positive")
 
-    if window_seconds is not None:
-        timestamps_by_ip = defaultdict(list)
-
-        for event in parse_events(log_path):
-            if event.kind == "failed" and event.timestamp is not None:
-                timestamps_by_ip[event.ip].append(event.timestamp)
-
-        return [
-            ip
-            for ip, timestamps in timestamps_by_ip.items()
-            if has_burst(timestamps, threshold, window_seconds)
-        ]
-
     with open(log_path, "r", encoding="utf-8") as file:
+        entries = _iter_failed_entries(
+            file, window_mode=window_seconds is not None,
+        )
+
+        if window_seconds is not None:
+            timestamps_by_ip = defaultdict(dict)
+
+            for line_number, event, replaced in entries:
+                if event.timestamp is None:
+                    continue
+
+                timestamps = timestamps_by_ip[event.ip]
+                if replaced is not None:
+                    del timestamps[replaced]
+                timestamps[line_number] = event.timestamp
+
+            return [
+                ip
+                for ip, timestamps in timestamps_by_ip.items()
+                if has_burst(list(timestamps.values()), threshold, window_seconds)
+            ]
+
         ip_counts = Counter()
-        for line in file:
-            if is_failed_login(line):
-                event = parse_event(line)
-                if event is not None and event.kind == "failed":
-                    ip_counts[event.ip] += 1
+        for _, event, replaced in entries:
+            if replaced is None:
+                ip_counts[event.ip] += 1
 
         return [
             ip for ip, count in ip_counts.items()
