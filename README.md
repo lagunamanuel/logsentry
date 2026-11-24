@@ -150,6 +150,7 @@ Logs must be valid UTF-8. Missing, unreadable or incorrectly encoded logs are re
 * `0`: Processing completed. Individual VirusTotal lookup failures are reported as `N/A` and do not change this status.
 * `1`: Log reading or CSV writing failed.
 * `2`: Invalid arguments or configuration, including a missing `VT_API_KEY` when `--no-vt` is not used.
+* `130`: Scan cancelled with Ctrl+C. Completed results are exported if `--output` was provided.
 ## 📸 Screenshots
 
 ### Full scan with VirusTotal
