@@ -661,3 +661,109 @@ def test_extract_ips_rejects_invalid_threshold_without_window(threshold):
             extract_ips_from_log("auth.log", threshold=threshold)
 
     open_log.assert_not_called()
+@pytest.mark.parametrize("window_seconds", [None, 60])
+def test_extract_ips_counts_invalid_user_pair_once(tmp_path, window_seconds):
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[123]: Invalid user admin from 192.0.2.10\n"
+        "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user admin "
+        "from 192.0.2.10 port 45678 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file), threshold=2, window_seconds=window_seconds,
+    ) == []
+@pytest.mark.parametrize(
+    "invalid_suffix, intervening, failures, threshold",
+    [
+        pytest.param("", "", "", 1, id="isolated-invalid-user"),
+        pytest.param(
+            "",
+            "",
+            "Jul 20 08:00:02 srv sshd[124]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n",
+            2,
+            id="different-pid",
+        ),
+        pytest.param(
+            " port 45679",
+            "",
+            "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n",
+            2,
+            id="different-port",
+        ),
+        pytest.param(
+            "",
+            "",
+            "Jul 20 08:00:06 srv sshd[123]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n",
+            2,
+            id="past-five-second-limit",
+        ),
+        pytest.param(
+            "",
+            "Jul 20 08:00:01 srv sshd[123]: "
+            "Connection closed by 192.0.2.10 port 45678 [preauth]\n",
+            "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n",
+            2,
+            id="connection-closed",
+        ),
+        pytest.param(
+            "",
+            "",
+            "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n"
+            "Jul 20 08:00:04 srv sshd[123]: Failed password for invalid user "
+            "admin from 192.0.2.10 port 45678 ssh2\n",
+            2,
+            id="two-password-failures",
+        ),
+    ],
+)
+def test_extract_ips_preserves_distinct_failures(
+    tmp_path, invalid_suffix, intervening, failures, threshold,
+):
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[123]: "
+        f"Invalid user admin from 192.0.2.10{invalid_suffix}\n"
+        + intervening
+        + failures,
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(str(log_file), threshold=threshold) == [
+        "192.0.2.10",
+    ]
+def test_extract_ips_uses_password_failure_time_for_correlated_pair(tmp_path):
+    log_file = tmp_path / "auth.log"
+    log_file.write_text(
+        "Jul 20 07:59:57 srv sshd[122]: Failed password for root "
+        "from 192.0.2.10 port 45677 ssh2\n"
+        "Jul 20 08:00:00 srv sshd[123]: Invalid user admin from 192.0.2.10\n"
+        "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+        "admin from 192.0.2.10 port 45678 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(
+        str(log_file), threshold=2, window_seconds=3,
+    ) == []
+def test_extract_ips_preserves_events_with_oversized_port(tmp_path):
+    """Invalid port metadata must neither crash nor enable correlation."""
+    log_file = tmp_path / "auth.log"
+    oversized_port = "9" * 5000
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[123]: Invalid user admin "
+        f"from 192.0.2.10 port {oversized_port}\n"
+        "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+        "admin from 192.0.2.10 port 45678 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(str(log_file), threshold=2) == [
+        "192.0.2.10",
+    ]

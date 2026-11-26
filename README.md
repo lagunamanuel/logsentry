@@ -5,7 +5,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 ## ✨ Features
 
 * **IPv4 Extraction:** Extracts IPv4 addresses from supported SSH authentication logs.
-* **Failed-Login Detection:** Counts supported failed-password and invalid-user SSH log entries per source IPv4 address. Optionally restrict detection to a time window.
+* **Failed-Login Detection:** Counts failed SSH login attempts per source IPv4 address, counting matching invalid-user and password-failure entries as one attempt.
 * **Threshold Control:** Flags IPs that meet or exceed a user-defined occurrence threshold.
 * **Time-Window Detection:** Optionally require the threshold to be reached per IP within a configurable number of seconds using `--window`.
 * **VirusTotal Integration:** Automatically checks suspicious IPs against multiple security engines to determine if they are malicious.
@@ -13,7 +13,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * **Rate Limit Aware:** Adds a 15-second delay after public-IP lookups when more results remain, unless `--premium` is used. VirusTotal quotas still apply.
 * **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
 * **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.
-
+* **Execution Summary:** Shows elapsed analysis time, including VirusTotal waits and export, on completion or graceful cancellation. Successfully written CSV files also report their size in bytes.
 ## ⚙️ Prerequisites
 
 * Python 3.9 or higher.
@@ -24,13 +24,12 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 
 Requires [pipx](https://pipx.pypa.io/).
 
-1. Download `logsentry-1.1.0-py3-none-any.whl` from the [v1.1.0 release](https://github.com/lagunamanuel/logsentry/releases/tag/v1.1.0).
-2. Open a terminal in the download directory and install it:
+1. Download the `.whl` file from the [latest release](https://github.com/lagunamanuel/logsentry/releases/latest).
+2. Open a terminal in the download directory and install it. Replace `VERSION` with the version shown in the downloaded filename:
 
    ```bash
-   pipx install ./logsentry-1.1.0-py3-none-any.whl
+   pipx install ./logsentry-VERSION-py3-none-any.whl
    ```
-
 3. Verify the command:
 
    ```bash
@@ -93,7 +92,7 @@ logsentry -l /path/to/your/test.log
 | Argument | Short | Description |
 | :--- | :--- | :--- |
 | `--log` | `-l` | **(Required)** Path to the UTF-8 SSH authentication log to analyze. |
-| `--threshold` | `-t` | Minimum failed-login entries per source IP. Must be a positive integer (Default: 5). |
+| `--threshold` | `-t` | Minimum number of counted failed login attempts per source IP. Must be a positive integer (default: 5). |
 | `--window` | `-w` | Require the threshold per IP within this many seconds. Must be a positive integer. Disabled by default. |
 | `--no-vt` | | Skip VirusTotal API lookups (local parsing only). |
 | `--premium` | | Skip the 15-second rate limit delay (only if you have a Premium VT API Key). |
@@ -121,7 +120,7 @@ logsentry -l auth.log -t 5 -w 60 --no-vt
 
 ### Time-window detection
 
-Without `--window`, LogSentry counts supported failed-password and invalid-user events per source IP across the whole file.
+Without `--window`, LogSentry counts failed login attempts per source IP across the whole file. Invalid-user correlation applies in both modes.
 With `--window SECONDS` (or `-w SECONDS`):
 * Failed SSH authentication events are grouped by source IP.
 * Any group reaching the threshold within the window is detected, even if log entries are out of chronological order.
@@ -150,6 +149,7 @@ Logs must be valid UTF-8. Missing, unreadable or incorrectly encoded logs are re
 * `0`: Processing completed. Individual VirusTotal lookup failures are reported as `N/A` and do not change this status.
 * `1`: Log reading or CSV writing failed.
 * `2`: Invalid arguments or configuration, including a missing `VT_API_KEY` when `--no-vt` is not used.
+* `130`: Scan cancelled with Ctrl+C. Completed results are exported if `--output` was provided.
 ## 📸 Screenshots
 
 ### Full scan with VirusTotal
@@ -173,12 +173,11 @@ python3 -m pytest tests/ -v
 ## ⚠️ Known Limitations
 
 * **SSH-style logs only:** both modes require supported SSH authentication messages, such as `Failed password for ... from ...` or `Invalid user ... from ...`. Other services such as nginx or Apache are not supported.
-* **Possible double counting:** sshd can log two lines for a single attempt against a non-existent user (`Invalid user ...` and `Failed password for invalid user ...`), so that attempt counts twice towards the threshold in both modes.
+* **Possible double counting:** In both modes, LogSentry counts an `Invalid user` entry and its subsequent `Failed password for invalid user` entry as one attempt when the host, SSH PID, username and source IPv4 match, the entries are no more than five seconds apart, and neither a connection closure nor conflicting ports prevents the match. Unmatched entries are still counted separately.
 * **IPv4 only:** IPv6 is not supported.
 * **Syslog date assumptions:** classic syslog timestamps contain no year or timezone. The current year is assumed; year rollover across December and January is not inferred.
 * **Timezone ambiguity:** in window mode, mixing timestamps with and without timezone information for the same source IP is rejected. No timezone is guessed for naive timestamps.
-* **Timestamp precision:** events sharing the same timestamp are counted separately. This does not resolve the possible double counting described above.
-
+* **Timestamp precision:** Distinct attempts can share a timestamp. A correlated invalid-user pair uses the timestamp of the password failure.
 ## 🗺️ Roadmap
 
 - [x] **Phase 1:** Core CLI structure and VirusTotal API integration.
@@ -186,7 +185,7 @@ python3 -m pytest tests/ -v
 - [x] **Phase 3:** CSV export for scan results.
 - [ ] **Phase 4:** Smart log parsing
   - [x] Count only failed login attempts (`Failed password`, `Invalid user`)
-  - [ ] Avoid double counting of a single attempt against an invalid user
+  - [x] Correlate matching invalid-user and password-failure entries
   - [x] Skip private/reserved IPs in VirusTotal lookups
   - [ ] Report targeted usernames per IP
   - [x] Time-window detection (N failures within M seconds)

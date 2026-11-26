@@ -37,7 +37,10 @@ def test_main_passes_detection_parameters(
         "auth.log", threshold, window_seconds=window_seconds,
     )
     check_vt.assert_not_called()
-    assert "IP 1.2.3.4 found (Skipping VirusTotal)" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "IP 1.2.3.4 found (Skipping VirusTotal)" in captured.out
+    assert "[*] Elapsed time:" in captured.out
+    assert "[*] CSV size:" not in captured.out
 
 
 @pytest.mark.parametrize(
@@ -147,7 +150,13 @@ def test_main_local_scan_and_csv(
         ] + extra_args,
     )
 
-    with patch("logsentry.main.check_ip_virustotal") as check_vt:
+    with (
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+        patch(
+            "logsentry.main.time.monotonic",
+            side_effect=[100.0, 3761.0],
+        ),
+    ):
         main()
 
     check_vt.assert_not_called()
@@ -155,9 +164,12 @@ def test_main_local_scan_and_csv(
         "ip,malicious_engines",
         *[f"{ip},N/A" for ip in expected_ips],
     ]
+    captured = capsys.readouterr()
+    assert f"Found {len(expected_ips)} unique IPs." in captured.out
+    assert "[*] Elapsed time: 1:01:01" in captured.out
     assert (
-            f"Found {len(expected_ips)} unique IPs."
-            in capsys.readouterr().out
+        f"[*] CSV size: {output_file.stat().st_size} bytes"
+        in captured.out
     )
 
 
@@ -529,3 +541,129 @@ def test_main_reports_csv_write_failure(monkeypatch, capsys):
         in captured.err
     )
     assert "Results exported" not in captured.out
+
+def test_main_saves_completed_results_when_interrupted(
+    tmp_path, monkeypatch, capsys,
+):
+    """Ctrl+C should save completed lookups, then exit with status 130."""
+    output_file = tmp_path / "partial.csv"
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "logsentry",
+            "-l", "auth.log",
+            "-t", "1",
+            "-o", str(output_file),
+        ],
+    )
+
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": 0},
+            },
+        },
+    }
+
+    with (
+        patch(
+            "logsentry.main.extract_ips_from_log",
+            return_value=["8.8.8.8", "1.1.1.1"],
+        ),
+        patch(
+            "logsentry.main.check_ip_virustotal",
+            return_value=vt_data,
+        ) as check_vt,
+        patch(
+            "logsentry.main.time.sleep",
+            side_effect=KeyboardInterrupt,
+        ),
+        patch(
+            "logsentry.main.time.monotonic",
+            side_effect=[100.0, 165.0],
+        ),
+    ):
+        try:
+            main()
+        except KeyboardInterrupt:
+            pytest.fail("Ctrl+C escaped before saving completed results")
+        except SystemExit as exc:
+            assert exc.code == 130
+        else:
+            pytest.fail("Cancellation must exit with status 130")
+
+    check_vt.assert_called_once_with("8.8.8.8")
+    assert output_file.read_text(encoding="utf-8").splitlines() == [
+        "ip,malicious_engines",
+        "8.8.8.8,0",
+    ]
+    captured = capsys.readouterr()
+    assert "[*] Elapsed time: 0:01:05" in captured.out
+    assert (
+        f"[*] CSV size: {output_file.stat().st_size} bytes"
+        in captured.out
+    )
+    assert captured.out.index("Results exported") < captured.out.index(
+        "[*] Elapsed time:"
+    )
+
+def test_main_interrupt_without_output_exits_130(monkeypatch):
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["logsentry", "-l", "auth.log", "-t", "1"],
+    )
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": 0},
+            },
+        },
+    }
+
+    with (
+        patch("logsentry.main.extract_ips_from_log", return_value=["8.8.8.8", "1.1.1.1"]),
+        patch("logsentry.main.check_ip_virustotal", return_value=vt_data) as check_vt,
+        patch("logsentry.main.time.sleep", side_effect=KeyboardInterrupt),
+    ):
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    assert exc.value.code == 130
+    check_vt.assert_called_once_with("8.8.8.8")
+
+
+def test_second_interrupt_during_csv_export_propagates(
+    tmp_path, monkeypatch,
+):
+    output_file = tmp_path / "partial.csv"
+    monkeypatch.setenv("VT_API_KEY", "fake_key")
+    monkeypatch.setattr(
+        "sys.argv",
+        ["logsentry", "-l", "auth.log", "-t", "1", "-o", str(output_file)],
+    )
+    vt_data = {
+        "data": {
+            "attributes": {
+                "last_analysis_stats": {"malicious": 0},
+            },
+        },
+    }
+
+    with (
+        patch("logsentry.main.extract_ips_from_log", return_value=["8.8.8.8", "1.1.1.1"]),
+        patch("logsentry.main.check_ip_virustotal", return_value=vt_data),
+        patch("logsentry.main.time.sleep", side_effect=KeyboardInterrupt),
+        patch(
+            "logsentry.reporter.export_to_csv",
+            side_effect=KeyboardInterrupt,
+        ) as export,
+    ):
+        with pytest.raises(KeyboardInterrupt):
+            main()
+
+    export.assert_called_once_with(
+        [{"ip": "8.8.8.8", "malicious_engines": 0}],
+        str(output_file),
+    )

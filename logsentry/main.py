@@ -1,7 +1,7 @@
 import argparse
 import time
 import os
-
+import sys
 from logsentry.parser import extract_ips_from_log, is_public_ip
 from logsentry.api import check_ip_virustotal
 
@@ -77,7 +77,8 @@ def main() -> None:
             "[!] Error: VT_API_KEY environment variable is not set.\n"
             "[*] Set VT_API_KEY or use --no-vt for local mode.\n",
         )
-
+    started_at = time.monotonic()
+    exported_size = None
     try:
         ips = extract_ips_from_log(
             args.log,
@@ -96,26 +97,45 @@ def main() -> None:
 
     total = len(ips)
     results = []
+    interrupted = False
 
-    for index, ip in enumerate(ips):
-        if args.no_vt:  # Fast path: Just announce IP is found, no API calls.
-            print(f"[*] IP {ip} found (Skipping VirusTotal)")
-            results.append({"ip": ip, "malicious_engines": "N/A"})
-        elif not is_public_ip(ip):
-            print(f"[*] IP {ip} is not publicly routable, skipping VirusTotal")
-            results.append({"ip": ip, "malicious_engines": "N/A"})
-        else:
-            print(f"\n[*] Checking IP: {ip}...")
-            vt_data = check_ip_virustotal(ip)
-            result = evaluate_vt_data(ip, vt_data)
-            results.append(result)
+    try:
+        for index, ip in enumerate(ips):
+            if args.no_vt:
+                print(f"[*] IP {ip} found (Skipping VirusTotal)")
+                results.append({"ip": ip, "malicious_engines": "N/A"})
+            elif not is_public_ip(ip):
+                print(
+                    f"[*] IP {ip} is not publicly routable, "
+                    "skipping VirusTotal"
+                )
+                results.append({"ip": ip, "malicious_engines": "N/A"})
+            else:
+                print(f"\n[*] Checking IP: {ip}...")
+                vt_data = check_ip_virustotal(ip)
+                result = evaluate_vt_data(ip, vt_data)
+                results.append(result)
 
-        if index < total - 1 and not args.premium and not args.no_vt and is_public_ip(ip):
-            for remaining in range(15, 0, -1):
-                print(f"\r[!] Rate limit: waiting {remaining}s...", end="", flush=True)
-                time.sleep(1)
-            print()
-
+            if (
+                index < total - 1
+                and not args.premium
+                and not args.no_vt
+                and is_public_ip(ip)
+            ):
+                for remaining in range(15, 0, -1):
+                    print(
+                        f"\r[!] Rate limit: waiting {remaining}s...",
+                        end="",
+                        flush=True,
+                    )
+                    time.sleep(1)
+                print()
+    except KeyboardInterrupt:
+        interrupted = True
+        print(
+            "\n[!] Interrupted by user. Saving completed results if requested.",
+            file=sys.stderr,
+        )
     if args.output and results:
         # Deferred import: reporter is only needed when --output is set
         from logsentry.reporter import export_to_csv
@@ -129,6 +149,23 @@ def main() -> None:
             )
 
         print(f"\n[*] Results exported to {args.output}")
+        try:
+            exported_size = os.path.getsize(args.output)
+        except OSError as exc:
+            print(
+                f"[!] Warning: Could not determine CSV size: {exc}",
+                file=sys.stderr,
+            )
+    elapsed_seconds = int(time.monotonic() - started_at)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(f"\n[*] Elapsed time: {hours}:{minutes:02d}:{seconds:02d}")
+
+    if exported_size is not None:
+        print(f"[*] CSV size: {exported_size} bytes")
+    if interrupted:
+        raise SystemExit(130)
 
 
 def evaluate_vt_data(ip: str, vt_data: dict) -> dict:
