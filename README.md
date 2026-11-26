@@ -24,13 +24,12 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 
 Requires [pipx](https://pipx.pypa.io/).
 
-1. Download `logsentry-1.1.0-py3-none-any.whl` from the [v1.1.0 release](https://github.com/lagunamanuel/logsentry/releases/tag/v1.1.0).
-2. Open a terminal in the download directory and install it:
+1. Download the `.whl` file from the [latest release](https://github.com/lagunamanuel/logsentry/releases/latest).
+2. Open a terminal in the download directory and install it. Replace `VERSION` with the version shown in the downloaded filename:
 
    ```bash
-   pipx install ./logsentry-1.1.0-py3-none-any.whl
+   pipx install ./logsentry-VERSION-py3-none-any.whl
    ```
-
 3. Verify the command:
 
    ```bash
