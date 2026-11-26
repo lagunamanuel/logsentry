@@ -77,7 +77,8 @@ def main() -> None:
             "[!] Error: VT_API_KEY environment variable is not set.\n"
             "[*] Set VT_API_KEY or use --no-vt for local mode.\n",
         )
-
+    started_at = time.monotonic()
+    exported_size = None
     try:
         ips = extract_ips_from_log(
             args.log,
@@ -148,6 +149,21 @@ def main() -> None:
             )
 
         print(f"\n[*] Results exported to {args.output}")
+        try:
+            exported_size = os.path.getsize(args.output)
+        except OSError as exc:
+            print(
+                f"[!] Warning: Could not determine CSV size: {exc}",
+                file=sys.stderr,
+            )
+    elapsed_seconds = int(time.monotonic() - started_at)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(f"\n[*] Elapsed time: {hours}:{minutes:02d}:{seconds:02d}")
+
+    if exported_size is not None:
+        print(f"[*] CSV size: {exported_size} bytes")
     if interrupted:
         raise SystemExit(130)
 

@@ -37,7 +37,10 @@ def test_main_passes_detection_parameters(
         "auth.log", threshold, window_seconds=window_seconds,
     )
     check_vt.assert_not_called()
-    assert "IP 1.2.3.4 found (Skipping VirusTotal)" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "IP 1.2.3.4 found (Skipping VirusTotal)" in captured.out
+    assert "[*] Elapsed time:" in captured.out
+    assert "[*] CSV size:" not in captured.out
 
 
 @pytest.mark.parametrize(
@@ -147,7 +150,13 @@ def test_main_local_scan_and_csv(
         ] + extra_args,
     )
 
-    with patch("logsentry.main.check_ip_virustotal") as check_vt:
+    with (
+        patch("logsentry.main.check_ip_virustotal") as check_vt,
+        patch(
+            "logsentry.main.time.monotonic",
+            side_effect=[100.0, 3761.0],
+        ),
+    ):
         main()
 
     check_vt.assert_not_called()
@@ -155,9 +164,12 @@ def test_main_local_scan_and_csv(
         "ip,malicious_engines",
         *[f"{ip},N/A" for ip in expected_ips],
     ]
+    captured = capsys.readouterr()
+    assert f"Found {len(expected_ips)} unique IPs." in captured.out
+    assert "[*] Elapsed time: 1:01:01" in captured.out
     assert (
-            f"Found {len(expected_ips)} unique IPs."
-            in capsys.readouterr().out
+        f"[*] CSV size: {output_file.stat().st_size} bytes"
+        in captured.out
     )
 
 
@@ -531,7 +543,7 @@ def test_main_reports_csv_write_failure(monkeypatch, capsys):
     assert "Results exported" not in captured.out
 
 def test_main_saves_completed_results_when_interrupted(
-    tmp_path, monkeypatch,
+    tmp_path, monkeypatch, capsys,
 ):
     """Ctrl+C should save completed lookups, then exit with status 130."""
     output_file = tmp_path / "partial.csv"
@@ -567,6 +579,10 @@ def test_main_saves_completed_results_when_interrupted(
             "logsentry.main.time.sleep",
             side_effect=KeyboardInterrupt,
         ),
+        patch(
+            "logsentry.main.time.monotonic",
+            side_effect=[100.0, 165.0],
+        ),
     ):
         try:
             main()
@@ -574,12 +590,24 @@ def test_main_saves_completed_results_when_interrupted(
             pytest.fail("Ctrl+C escaped before saving completed results")
         except SystemExit as exc:
             assert exc.code == 130
+        else:
+            pytest.fail("Cancellation must exit with status 130")
 
     check_vt.assert_called_once_with("8.8.8.8")
     assert output_file.read_text(encoding="utf-8").splitlines() == [
         "ip,malicious_engines",
         "8.8.8.8,0",
     ]
+    captured = capsys.readouterr()
+    assert "[*] Elapsed time: 0:01:05" in captured.out
+    assert (
+        f"[*] CSV size: {output_file.stat().st_size} bytes"
+        in captured.out
+    )
+    assert captured.out.index("Results exported") < captured.out.index(
+        "[*] Elapsed time:"
+    )
+
 def test_main_interrupt_without_output_exits_130(monkeypatch):
     monkeypatch.setenv("VT_API_KEY", "fake_key")
     monkeypatch.setattr(

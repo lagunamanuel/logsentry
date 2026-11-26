@@ -13,7 +13,7 @@ LogSentry is a Python-based security command-line tool designed to parse log fil
 * **Rate Limit Aware:** Adds a 15-second delay after public-IP lookups when more results remain, unless `--premium` is used. VirusTotal quotas still apply.
 * **Local Mode:** Includes a `--no-vt` flag for fast, local-only parsing without making any API calls.
 * **CSV Export:** Export scan results to a CSV file for further analysis or record-keeping.
-
+* **Execution Summary:** Shows elapsed analysis time, including VirusTotal waits and export, on completion or graceful cancellation. Successfully written CSV files also report their size in bytes.
 ## ⚙️ Prerequisites
 
 * Python 3.9 or higher.
