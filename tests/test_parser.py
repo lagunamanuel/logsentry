@@ -752,3 +752,18 @@ def test_extract_ips_uses_password_failure_time_for_correlated_pair(tmp_path):
     assert extract_ips_from_log(
         str(log_file), threshold=2, window_seconds=3,
     ) == []
+def test_extract_ips_preserves_events_with_oversized_port(tmp_path):
+    """Invalid port metadata must neither crash nor enable correlation."""
+    log_file = tmp_path / "auth.log"
+    oversized_port = "9" * 5000
+    log_file.write_text(
+        "Jul 20 08:00:00 srv sshd[123]: Invalid user admin "
+        f"from 192.0.2.10 port {oversized_port}\n"
+        "Jul 20 08:00:02 srv sshd[123]: Failed password for invalid user "
+        "admin from 192.0.2.10 port 45678 ssh2\n",
+        encoding="utf-8",
+    )
+
+    assert extract_ips_from_log(str(log_file), threshold=2) == [
+        "192.0.2.10",
+    ]

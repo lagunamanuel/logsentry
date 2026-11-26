@@ -221,7 +221,7 @@ def has_burst(
 
 # Match the SSH process after a supported timestamp.
 _SSH_PROCESS = re.compile(r"\s+(\S+) sshd\[(\d+)\]:\s+")
-_SOURCE_PORT = re.compile(r"\s+port ([0-9]+)(?=\s|$)")
+_SOURCE_PORT = re.compile(r"\s+port (\S+)")
 _CONNECTION_END = (
     "Connection closed",
     "Connection reset",
@@ -257,12 +257,29 @@ def _iter_failed_entries(lines, *, window_mode):
             # Any subsequent authentication entry consumes the prior candidate.
             previous = pending.pop(key, None)
             port_match = _SOURCE_PORT.match(message, match.end())
-            port = int(port_match.group(1)) if port_match else None
+            port = None
+            valid_port = True
 
-            if message.startswith("Invalid user ") and event.timestamp is not None:
+            if port_match is not None:
+                raw_port = port_match.group(1)
+                valid_port = (
+                    1 <= len(raw_port) <= 5
+                    and raw_port.isascii()
+                    and raw_port.isdecimal()
+                )
+                if valid_port:
+                    port = int(raw_port)
+                    valid_port = 1 <= port <= 65535
+
+            if (
+                valid_port
+                and message.startswith("Invalid user ")
+                and event.timestamp is not None
+            ):
                 pending[key] = (line_number, event, port)
             elif (
-                previous is not None
+                valid_port
+                and previous is not None
                 and message.startswith("Failed password for invalid user ")
                 and event.timestamp is not None
             ):
