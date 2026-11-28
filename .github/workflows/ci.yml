@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests - Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.14"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install project and test dependencies
+        run: python -m pip install . pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  package:
+    name: Build and verify packages
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.9"
+
+      - name: Install build tool
+        run: python -m pip install build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Install wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/smoke-env"
+          "$RUNNER_TEMP/smoke-env/bin/python" -m pip install dist/*.whl
+
+      - name: Verify installed CLI outside repository
+        shell: bash
+        run: |
+          work_dir=$(mktemp -d "$RUNNER_TEMP/logsentry-smoke-XXXXXX")
+          cp test.log "$work_dir/test.log"
+          cd "$work_dir"
+
+          "$RUNNER_TEMP/smoke-env/bin/python" -I -c \
+            'from importlib.metadata import version; import logsentry; print(version("logsentry")); print(logsentry.__file__)'
+
+          "$RUNNER_TEMP/smoke-env/bin/logsentry" --help
+          "$RUNNER_TEMP/smoke-env/bin/logsentry" \
+            -l test.log --no-vt -o results.csv
+
+          "$RUNNER_TEMP/smoke-env/bin/python" -I -c \
+            'from pathlib import Path; assert Path("results.csv").read_text() == "ip,malicious_engines\n1.1.1.1,N/A\n"'
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logsentry-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
