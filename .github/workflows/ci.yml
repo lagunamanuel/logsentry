@@ -69,8 +69,11 @@ jobs:
         shell: bash
         run: |
           work_dir=$(mktemp -d "$RUNNER_TEMP/logsentry-smoke-XXXXXX")
-          cp test.log "$work_dir/test.log"
           cd "$work_dir"
+          for attempt in {1..5}; do
+            printf '%s\n' \
+              "Jul 20 08:00:00 srv sshd[$attempt]: Failed password for root from 1.1.1.1 port 45678 ssh2"
+          done > test.log
 
           "$RUNNER_TEMP/smoke-env/bin/python" -I -c \
             'from importlib.metadata import version; import logsentry; print(version("logsentry")); print(logsentry.__file__)'
