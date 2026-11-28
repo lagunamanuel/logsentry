@@ -161,15 +161,20 @@ Logs must be valid UTF-8. Missing, unreadable or incorrectly encoded logs are re
 ### CSV export
 ![CSV export](docs/screenshots/csv-export.png)
 
-### Test suite
-![Tests](docs/screenshots/tests.png)
 ## 🧪 Testing
-
 LogSentry includes tests for the parser, API client, reporter and CLI, including local scans and CSV export with and without time-window detection. HTTP requests are mocked, so tests do not require network access or consume API quota.
 ```bash
 pip install pytest
 python3 -m pytest tests/ -v
 ```
+
+### Continuous integration
+
+GitHub Actions runs the test suite on Python 3.9 and 3.14 for pushes and pull requests targeting `main` or `develop`.
+
+After the tests pass, CI builds the wheel and source distribution, installs the wheel in a clean environment, and verifies the CLI and CSV export outside the repository using a synthetic SSH log. No VirusTotal API key is required.
+
+Distribution artifacts are retained for seven days. Release publication remains manual.
 ## ⚠️ Known Limitations
 
 * **SSH-style logs only:** both modes require supported SSH authentication messages, such as `Failed password for ... from ...` or `Invalid user ... from ...`. Other services such as nginx or Apache are not supported.
